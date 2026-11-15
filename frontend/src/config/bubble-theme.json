@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "glass": {
+    "density": 3,
+    "opacity": 0.84,
+    "edgeOpacity": 1,
+    "innerGlow": 1.5,
+    "saturation": 1.47,
+    "rimShine": 1.5,
+    "softHighlight": 0.34,
+    "sharpness": 0.4,
+    "glint": 1.5,
+    "rimLight": 0.55
+  },
+  "motion": {
+    "drift": 3,
+    "ripple": 1.7,
+    "colorFlow": 4,
+    "mouse": 2.5
+  },
+  "backdrop": {
+    "beamColor": "#ff7b00",
+    "beamStrength": 1.5,
+    "metallic": 0.8,
+    "bubbleGlow": 0.38,
+    "links": 0
+  },
+  "distant": {
+    "opacity": 0.7,
+    "colors": [
+      "#3b82f6",
+      "#8b5cf6",
+      "#ec4899"
+    ]
+  },
+  "bubbles": [
+    {
+      "id": "study",
+      "tones": {
+        "color": "#06b6d4",
+        "light": "#4ade80",
+        "deep": "#0284c7"
+      },
+      "task": {
+        "name": "Estudar para a prova",
+        "steps": [
+          "ler o capítulo 3",
+          "fazer os exercícios",
+          "revisar o resumo"
+        ]
+      },
+      "wide": {
+        "x": 0.3,
+        "y": -0.2,
+        "z": -0.6,
+        "r": 0.33
+      },
+      "tall": {
+        "x": 0.27,
+        "y": 0.3,
+        "z": -0.6,
+        "r": 0.28
+      }
+    },
+    {
+      "id": "party",
+      "tones": {
+        "color": "#f97316",
+        "light": "#fbbf24",
+        "deep": "#f43f5e"
+      },
+      "task": {
+        "name": "Festa da Bia",
+        "steps": [
+          "convidar a turma",
+          "encomendar o bolo",
+          "decorar a sala"
+        ]
+      },
+      "wide": {
+        "x": 0.07,
+        "y": 0.27,
+        "z": -1,
+        "r": 0.17
+      },
+      "tall": {
+        "x": -0.27,
+        "y": 0.36,
+        "z": -1,
+        "r": 0.17
+      }
+    },
+    {
+      "id": "paint",
+      "tones": {
+        "color": "#8b5cf6",
+        "light": "#e879f9",
+        "deep": "#4f46e5"
+      },
+      "task": {
+        "name": "Pintar o quarto",
+        "steps": [
+          "comprar tinta",
+          "lixar a parede",
+          "passar a tinta"
+        ]
+      },
+      "wide": {
+        "x": -0.02,
+        "y": -0.08,
+        "z": 0,
+        "r": 0.15
+      },
+      "tall": {
+        "x": -0.12,
+        "y": 0.2,
+        "z": 0,
+        "r": 0.14
+      }
+    },
+    {
+      "id": "trip",
+      "tones": {
+        "color": "#ec4899",
+        "light": "#fb923c",
+        "deep": "#be185d"
+      },
+      "task": {
+        "name": "Organizar a viagem",
+        "steps": [
+          "comprar passagens",
+          "reservar o hotel",
+          "fazer a mala"
+        ]
+      },
+      "wide": {
+        "x": 0.06,
+        "y": -0.5,
+        "z": -1.4,
+        "r": 0.16
+      },
+      "tall": {
+        "x": -0.46,
+        "y": 0.17,
+        "z": -1.4,
+        "r": 0.12
+      }
+    }
+  ]
+}
