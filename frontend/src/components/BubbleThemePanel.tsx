@@ -5,20 +5,25 @@ import {
   BACKDROP_RANGES,
   changeBubble,
   DISTANT_OPACITY_RANGE,
+  DISTANT_SIZE_RANGE,
   GLASS_RANGES,
+  HEADLINE_MAX_LENGTH,
   MAX_BUBBLES,
   MIN_BUBBLES,
   MOTION_RANGES,
   PLACEMENT_RANGES,
   removeBubble,
+  STEP_SIZE_RANGE,
   TASK_NAME_MAX_LENGTH,
   TASK_STEP_MAX_LENGTH,
+  TEXT_RANGES,
   type BackdropNumbers,
   type BubbleDefinition,
   type BubblePlacement,
   type BubbleTones,
   type GlassLook,
   type MotionSettings,
+  type TextNumbers,
 } from '@/models/bubbleTheme'
 
 /** Which layout the place and size sliders change. The preview shows the same layout. */
@@ -83,8 +88,14 @@ const BACKDROP_CONTROLS: Control<keyof BackdropNumbers>[] = [
 const PLACEMENT_CONTROLS: Control<keyof BubblePlacement>[] = [
   { key: 'x', label: 'Horizontal' },
   { key: 'y', label: 'Vertical' },
-  { key: 'r', label: 'Tamanho' },
   { key: 'z', label: 'Profundidade', hint: 'Mais alto: mais perto, na frente das outras.' },
+]
+
+const TEXT_CONTROLS: Control<keyof TextNumbers>[] = [
+  { key: 'size', label: 'Tamanho do texto', hint: '1 é o tamanho padrão.' },
+  { key: 'weight', label: 'Peso das letras', hint: '400 é normal. 800 é extranegrito.' },
+  { key: 'shadow', label: 'Sombra do texto', hint: 'Ajuda a ler sobre partes claras do vidro. 0 desliga.' },
+  { key: 'seconds', label: 'Tempo de cada passo (segundos)', hint: 'Quanto um passo fica na bolha antes do próximo.' },
 ]
 
 const TONE_CONTROLS: Control<keyof BubbleTones>[] = [
@@ -93,7 +104,7 @@ const TONE_CONTROLS: Control<keyof BubbleTones>[] = [
   { key: 'deep', label: 'Profunda' },
 ]
 
-const DISTANT_LABELS = ['Cor 1', 'Cor 2', 'Cor 3']
+const DISTANT_LABELS = ['Cor da bolha 1', 'Cor da bolha 2', 'Cor da bolha 3']
 
 interface BubbleCardProps {
   bubble: BubbleDefinition
@@ -125,7 +136,22 @@ function BubbleCard({ bubble, number, layout, canRemove }: BubbleCardProps) {
       </summary>
 
       <div className="border-t border-ink/10 px-3 pt-3 pb-3">
-        <p className="text-[12px] font-semibold tracking-wide text-ink/55 uppercase">Cores</p>
+        <p className="text-[12px] font-semibold tracking-wide text-ink/55 uppercase">Tamanho</p>
+        <SliderField
+          label={`Tamanho da bolha ${layout === 'wide' ? '(desktop)' : '(celular)'}`}
+          value={bubble[layout].r}
+          range={PLACEMENT_RANGES.r}
+          onChange={(r) => update((current) => ({ ...current, [layout]: { ...current[layout], r } }))}
+        />
+        <SliderField
+          label="Tamanho dos passos soltos"
+          hint="Os balõezinhos que saem desta bolha quando você puxa."
+          value={bubble.stepSize}
+          range={STEP_SIZE_RANGE}
+          onChange={(stepSize) => update((current) => ({ ...current, stepSize }))}
+        />
+
+        <p className="mt-4 text-[12px] font-semibold tracking-wide text-ink/55 uppercase">Cores</p>
         <div className="mt-1.5 flex gap-2">
           {TONE_CONTROLS.map((tone) => (
             <ColorField
@@ -163,7 +189,7 @@ function BubbleCard({ bubble, number, layout, canRemove }: BubbleCardProps) {
         ))}
 
         <p className="mt-4 text-[12px] font-semibold tracking-wide text-ink/55 uppercase">
-          Lugar e tamanho {layout === 'wide' ? 'no desktop' : 'no celular'}
+          Lugar {layout === 'wide' ? 'no desktop' : 'no celular'}
         </p>
         {PLACEMENT_CONTROLS.map((control) => (
           <SliderField
@@ -241,6 +267,36 @@ export function BubbleThemePanel({ layout }: { layout: EditedLayout }) {
         </button>
       </Section>
 
+      <Section title="Texto">
+        <TextField
+          label="Frase de destaque da página"
+          value={draft.text.headline}
+          maxLength={HEADLINE_MAX_LENGTH}
+          onChange={(headline) => change((theme) => ({ ...theme, text: { ...theme.text, headline } }))}
+        />
+        <p className="text-[12px] leading-snug text-ink/55">
+          Fica no canto de cima, só em tela larga. Vazio esconde a frase. O texto de cada bolha se edita na própria
+          bolha, em "Bolhas".
+        </p>
+        <div className="mt-3 flex">
+          <ColorField
+            label="Cor do texto das bolhas"
+            value={draft.text.color}
+            onChange={(color) => change((theme) => ({ ...theme, text: { ...theme.text, color } }))}
+          />
+        </div>
+        {TEXT_CONTROLS.map((control) => (
+          <SliderField
+            key={control.key}
+            label={control.label}
+            hint={control.hint}
+            value={draft.text[control.key]}
+            range={TEXT_RANGES[control.key]}
+            onChange={(value) => change((theme) => ({ ...theme, text: { ...theme.text, [control.key]: value } }))}
+          />
+        ))}
+      </Section>
+
       <Section title="Fundo e fios">
         <div className="flex">
           <ColorField
@@ -287,6 +343,21 @@ export function BubbleThemePanel({ layout }: { layout: EditedLayout }) {
             />
           ))}
         </div>
+        {draft.distant.sizes.map((size, index) => (
+          <SliderField
+            key={index}
+            label={`Tamanho da bolha ${index + 1}`}
+            value={size}
+            range={DISTANT_SIZE_RANGE}
+            onChange={(value) =>
+              change((theme) => {
+                const sizes: [number, number, number] = [...theme.distant.sizes]
+                sizes[index] = value
+                return { ...theme, distant: { ...theme.distant, sizes } }
+              })
+            }
+          />
+        ))}
       </Section>
 
       <Section title="Movimento">

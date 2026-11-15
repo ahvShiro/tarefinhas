@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
   type ComponentRef,
+  type CSSProperties,
   type Ref,
   type RefObject,
 } from 'react'
@@ -37,6 +38,7 @@ import type {
   BubbleTones,
   GlassLook,
   MotionSettings,
+  TextSettings,
 } from '@/models/bubbleTheme'
 
 // Decorative 3D backdrop of the homepage: liquid glass bubbles that drift slowly, move away from the mouse
@@ -59,6 +61,8 @@ interface BubbleSpec {
   tones: BubbleTones
   /** The sample task. The bubble shows its steps; pulling the bubble separates them. */
   task: BubbleTask
+  /** Size of the steps that this bubble releases. It multiplies the standard size. */
+  stepSize: number
 }
 
 /**
@@ -72,6 +76,7 @@ function layoutFromTheme(theme: BubbleTheme, tall: boolean): BubbleSpec[] {
     ...(tall ? bubble.tall : bubble.wide),
     tones: bubble.tones,
     task: bubble.task,
+    stepSize: bubble.stepSize,
   }))
 }
 
@@ -110,15 +115,14 @@ const PUSH_REACH = 2.2 // the mouse pushes a bubble when it is closer than this 
 const PUSH_STRENGTH = 0.45 // push distance at the bubble edge, in radii
 const ENTRANCE_SECONDS = 1.4
 const ENTRANCE_STAGGER = 0.12
-const PHRASE_SECONDS = 4
 
 // Splitting: pulling a bubble (or a tap/click on it) separates one step into a smaller linked bubble.
 const SPLIT_RADIUS = 0.42 // split bubble radius, as a share of its source bubble
 const SPLIT_MAX_RADIUS = 0.065 // ...but never larger than this share of the layout unit: steps stay small
 
 /** Radius of a separated step, in world units. Small and alike, whatever the size of its source. */
-function splitRadius(sourceRadius: number, unit: number) {
-  return Math.min(sourceRadius * SPLIT_RADIUS, unit * SPLIT_MAX_RADIUS)
+function splitRadius(sourceRadius: number, unit: number, scale: number) {
+  return Math.min(sourceRadius * SPLIT_RADIUS, unit * SPLIT_MAX_RADIUS) * scale
 }
 const MAX_SPLITS_PER_BUBBLE = 2 // the last step stays in the bubble
 // Demonstration: while the person has not touched a bubble, a bubble separates a step by itself from time
@@ -265,17 +269,18 @@ function remainingSteps(task: BubbleTask, sourceIndex: number, splitSteps: Split
     .filter((step) => !splitSteps.some((split) => split.sourceIndex === sourceIndex && split.stepIndex === step.index))
 }
 
-/** Which remaining step the bubble shows now. The steps take turns, PHRASE_SECONDS each. */
+/** Which remaining step the bubble shows now. The steps take turns, `phraseSeconds` each. */
 function shownStepIndex(
   bubbleIndex: number,
   bubbleCount: number,
   count: number,
   elapsedSeconds: number,
   reducedMotion: boolean,
+  phraseSeconds: number,
 ) {
   if (count <= 1 || reducedMotion) return 0
-  // The bubbles take turns: every PHRASE_SECONDS, only one of them moves to its next step.
-  const turn = Math.floor((elapsedSeconds - ENTRANCE_SECONDS) / PHRASE_SECONDS)
+  // The bubbles take turns: every `phraseSeconds`, only one of them moves to its next step.
+  const turn = Math.floor((elapsedSeconds - ENTRANCE_SECONDS) / phraseSeconds)
   if (turn < bubbleIndex) return 0
   const changes = Math.floor((turn - bubbleIndex) / bubbleCount) + 1
   return changes % count
@@ -789,6 +794,7 @@ interface BubbleProps {
   glass: GlassLook
   backdrop: BackdropLook
   motion: MotionSettings
+  text: TextSettings
   pointer: RefObject<PointerState>
   reducedMotion: boolean
   /** Page element that holds this bubble's phrases. The scene moves it over the bubble every frame. */
@@ -808,6 +814,7 @@ function Bubble({
   glass,
   backdrop,
   motion,
+  text,
   pointer,
   reducedMotion,
   phraseElement,
@@ -930,11 +937,12 @@ function Bubble({
         state.size.width,
         state.size.height,
       )
-      if (element.dataset.radius !== radiusPx.toFixed(0)) {
-        element.dataset.radius = radiusPx.toFixed(0)
+      const fit = `${radiusPx.toFixed(0)}:${text.size}`
+      if (element.dataset.fit !== fit) {
+        element.dataset.fit = fit
         element.style.width = `${radiusPx * 1.6}px`
-        // Same text size as before the bubbles shrank by 20%.
-        element.style.fontSize = `${MathUtils.clamp(radiusPx * 0.25, 15, 32)}px`
+        // The standard size, times the text size of the theme.
+        element.style.fontSize = `${MathUtils.clamp(radiusPx * 0.25, 15, 32) * text.size}px`
       }
       element.style.opacity = time > index * ENTRANCE_STAGGER + ENTRANCE_SECONDS * 0.5 || reducedMotion ? '1' : '0'
     }
@@ -972,6 +980,7 @@ interface SplitStepBubbleProps {
   glass: GlassLook
   backdrop: BackdropLook
   motion: MotionSettings
+  text: TextSettings
   sourceRadius: number
   /** This step's radius, in world units. */
   radius: number
@@ -993,6 +1002,7 @@ function SplitStepBubble({
   glass,
   backdrop,
   motion,
+  text,
   sourceRadius,
   radius,
   sourceZ,
@@ -1102,10 +1112,11 @@ function SplitStepBubble({
     const element = phraseElement()
     if (element) {
       placePhrase(element, body.current.getWorldPosition(point), state.camera, state.size.width, state.size.height)
-      if (element.dataset.radius !== radiusPx.toFixed(0)) {
-        element.dataset.radius = radiusPx.toFixed(0)
+      const fit = `${radiusPx.toFixed(0)}:${text.size}`
+      if (element.dataset.fit !== fit) {
+        element.dataset.fit = fit
         element.style.width = `${radiusPx * 1.8}px`
-        element.style.fontSize = `${MathUtils.clamp(radiusPx * 0.325, 13, 21)}px`
+        element.style.fontSize = `${MathUtils.clamp(radiusPx * 0.325, 13, 21) * text.size}px`
       }
       // A step that goes back hides its text at once: the text must not cover the text of its bubble.
       element.style.transitionDuration = leaving > 0 ? '120ms' : ''
@@ -1141,6 +1152,7 @@ interface BubblesProps {
   glass: GlassLook
   backdrop: BackdropLook
   motion: MotionSettings
+  text: TextSettings
   tall: boolean
   reducedMotion: boolean
   phraseElements: RefObject<(HTMLDivElement | null)[]>
@@ -1161,6 +1173,7 @@ function Bubbles({
   glass,
   backdrop,
   motion,
+  text,
   tall,
   reducedMotion,
   phraseElements,
@@ -1269,7 +1282,7 @@ function Bubbles({
       if (done >= MAX_SPLITS_PER_BUBBLE) return refuse()
       const { layout: currentLayout, unit: currentUnit, worldPerPx, size: canvasSize } = latest.current
       const sourceRadius = currentLayout[index].r * currentUnit
-      const stepRadius = splitRadius(sourceRadius, currentUnit)
+      const stepRadius = splitRadius(sourceRadius, currentUnit, currentLayout[index].stepSize)
       const stepRadiusPx = stepRadius / worldPerPx
       const minimumPx = (sourceRadius * 1.1 + stepRadius + 0.15) / worldPerPx
       const maximumPx = (sourceRadius * 3) / worldPerPx
@@ -1283,7 +1296,12 @@ function Bubbles({
           {
             x: source.x + step.offsetX / worldPerPx,
             y: source.y - step.offsetY / worldPerPx,
-            r: splitRadius(currentLayout[step.sourceIndex].r * currentUnit, currentUnit) / worldPerPx,
+            r:
+              splitRadius(
+                currentLayout[step.sourceIndex].r * currentUnit,
+                currentUnit,
+                currentLayout[step.sourceIndex].stepSize,
+              ) / worldPerPx,
           },
         ]
       })
@@ -1468,6 +1486,7 @@ function Bubbles({
           glass={glass}
           backdrop={backdrop}
           motion={motion}
+          text={text}
           pointer={pointer}
           reducedMotion={reducedMotion}
           phraseElement={() => phraseElements.current[index] ?? null}
@@ -1492,8 +1511,9 @@ function Bubbles({
             glass={glass}
             backdrop={backdrop}
             motion={motion}
+            text={text}
             sourceRadius={source.r * unit}
-            radius={splitRadius(source.r * unit, unit)}
+            radius={splitRadius(source.r * unit, unit, source.stepSize)}
             sourceZ={source.z}
             sourceBody={() => bodies.current[step.sourceIndex] ?? null}
             reducedMotion={reducedMotion}
@@ -1566,13 +1586,15 @@ interface DistantBubbleProps {
   index: number
   tall: boolean
   color: string
+  /** Size of this bubble. It multiplies the standard size. */
+  scale: number
   /** The distant bubbles stay faint: they add depth, they do not compete with the glass ones. */
   opacity: number
   texture: Texture
   reducedMotion: boolean
 }
 
-function DistantBubble({ spec, index, tall, color, opacity, texture, reducedMotion }: DistantBubbleProps) {
+function DistantBubble({ spec, index, tall, color, scale, opacity, texture, reducedMotion }: DistantBubbleProps) {
   const mesh = useRef<Mesh>(null)
   const material = useRef<MeshBasicMaterial>(null)
   const camera = useThree((state) => state.camera)
@@ -1581,7 +1603,7 @@ function DistantBubble({ spec, index, tall, color, opacity, texture, reducedMoti
   // Visible area at this bubble's depth: farther bubbles spread over a larger area.
   const area = getViewport(camera, [0, 0, spec.z], size)
   const unit = tall ? tallUnit(area.width, area.height) : area.height
-  const radius = spec.r * unit
+  const radius = spec.r * unit * scale
   const baseX = spec.x * area.width
   const baseY = spec.y * area.height
   const phase = index * 2.3
@@ -1624,13 +1646,14 @@ function DistantBubble({ spec, index, tall, color, opacity, texture, reducedMoti
 interface DistantBubblesProps {
   tall: boolean
   colors: readonly [string, string, string]
+  sizes: readonly [number, number, number]
   opacity: number
   /** How much the group leans against the mouse: the theme's `motion.mouse`. */
   lean: number
   reducedMotion: boolean
 }
 
-function DistantBubbles({ tall, colors, opacity, lean, reducedMotion }: DistantBubblesProps) {
+function DistantBubbles({ tall, colors, sizes, opacity, lean, reducedMotion }: DistantBubblesProps) {
   const group = useRef<Group>(null)
   const pointer = useWindowPointer()
   const [textures] = useState(createDistantBubbleTextures)
@@ -1655,6 +1678,7 @@ function DistantBubbles({ tall, colors, opacity, lean, reducedMotion }: DistantB
           index={index}
           tall={tall}
           color={colors[spec.tone]}
+          scale={sizes[spec.tone]}
           opacity={opacity}
           texture={textures[spec.blur]}
           reducedMotion={reducedMotion}
@@ -1669,6 +1693,7 @@ interface BubbleTextLayerProps {
   layoutKey: 'wide' | 'tall'
   splitSteps: SplitStep[]
   startedAt: RefObject<number>
+  text: TextSettings
   reducedMotion: boolean
   phraseElements: RefObject<(HTMLDivElement | null)[]>
   splitElements: RefObject<Map<string, HTMLDivElement>>
@@ -1690,6 +1715,7 @@ function BubbleTextLayer({
   layoutKey,
   splitSteps,
   startedAt,
+  text,
   reducedMotion,
   phraseElements,
   splitElements,
@@ -1708,10 +1734,26 @@ function BubbleTextLayer({
   }, [reducedMotion, startedAt])
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      style={
+        {
+          '--bubble-text-weight': text.weight,
+          '--bubble-text-color': text.color,
+          '--bubble-text-shadow': text.shadow,
+        } as CSSProperties
+      }
+    >
       {layout.map((spec, index) => {
         const remaining = remainingSteps(spec.task, index, splitSteps)
-        const shown = shownStepIndex(index, layout.length, remaining.length, elapsedSeconds, reducedMotion)
+        const shown = shownStepIndex(
+          index,
+          layout.length,
+          remaining.length,
+          elapsedSeconds,
+          reducedMotion,
+          text.seconds,
+        )
         return (
           <div
             key={`${layoutKey}-${index}`}
@@ -1853,7 +1895,16 @@ export function HomeBackdrop({ theme, ref, onStepsOutChange }: HomeBackdropProps
         sceneKey,
         sourceIndex,
         stepIndex:
-          remaining[shownStepIndex(sourceIndex, layout.length, remaining.length, elapsedSeconds, reducedMotion)].index,
+          remaining[
+            shownStepIndex(
+              sourceIndex,
+              layout.length,
+              remaining.length,
+              elapsedSeconds,
+              reducedMotion,
+              theme.text.seconds,
+            )
+          ].index,
         offsetX,
         offsetY,
         bornAt: performance.now(),
@@ -1882,6 +1933,7 @@ export function HomeBackdrop({ theme, ref, onStepsOutChange }: HomeBackdropProps
         <DistantBubbles
           tall={tall}
           colors={theme.distant.colors}
+          sizes={theme.distant.sizes}
           opacity={theme.distant.opacity}
           lean={theme.motion.mouse}
           reducedMotion={reducedMotion}
@@ -1892,6 +1944,7 @@ export function HomeBackdrop({ theme, ref, onStepsOutChange }: HomeBackdropProps
           glass={theme.glass}
           backdrop={theme.backdrop}
           motion={theme.motion}
+          text={theme.text}
           tall={tall}
           reducedMotion={reducedMotion}
           phraseElements={phraseElements}
@@ -1906,6 +1959,7 @@ export function HomeBackdrop({ theme, ref, onStepsOutChange }: HomeBackdropProps
         layoutKey={layoutKey}
         splitSteps={visibleSplitSteps}
         startedAt={startedAt}
+        text={theme.text}
         reducedMotion={reducedMotion}
         phraseElements={phraseElements}
         splitElements={splitElements}

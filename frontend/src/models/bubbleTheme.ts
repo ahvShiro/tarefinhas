@@ -72,9 +72,44 @@ export const MOTION_RANGES: Record<keyof MotionSettings, NumberRange> = {
 export interface DistantBubbles {
   opacity: number
   colors: [string, string, string]
+  /** Size of each one of the 3 bubbles. It multiplies the standard size. */
+  sizes: [number, number, number]
 }
 
 export const DISTANT_OPACITY_RANGE: NumberRange = { min: 0, max: 1, step: 0.01 }
+
+/** Size of each out-of-focus bubble. It multiplies the standard size: 1 is standard. */
+export const DISTANT_SIZE_RANGE: NumberRange = { min: 0.4, max: 2.5, step: 0.05 }
+
+/** Size of the steps that a bubble releases. It multiplies the standard size: 1 is standard. */
+export const STEP_SIZE_RANGE: NumberRange = { min: 0.5, max: 2, step: 0.05 }
+
+/** The text inside the bubbles, and the headline of the homepage. */
+export interface TextSettings {
+  /** Size of the text inside the bubbles. It multiplies the standard size: 1 is standard. */
+  size: number
+  /** Weight of the letters: 400 is regular, 600 is semibold, 800 is extra bold. */
+  weight: number
+  /** Strength of the soft shadow that keeps the text readable on light parts of the glass. 0 is off. */
+  shadow: number
+  /** How many seconds each step stays on show before the next one. */
+  seconds: number
+  /** Color of the text inside the bubbles. */
+  color: string
+  /** Headline in the upper right corner of wide screens. Empty hides it. */
+  headline: string
+}
+
+export type TextNumbers = Pick<TextSettings, 'size' | 'weight' | 'shadow' | 'seconds'>
+
+export const TEXT_RANGES: Record<keyof TextNumbers, NumberRange> = {
+  size: { min: 0.7, max: 1.6, step: 0.05 },
+  weight: { min: 400, max: 800, step: 50 },
+  shadow: { min: 0, max: 1.5, step: 0.05 },
+  seconds: { min: 2, max: 12, step: 0.5 },
+}
+
+export const HEADLINE_MAX_LENGTH = 60
 
 /** The number settings of the background wall behind the bubbles, and of the threads between the bubbles. */
 export interface BackdropNumbers {
@@ -142,6 +177,8 @@ export interface BubbleDefinition {
   id: string
   tones: BubbleTones
   task: BubbleTask
+  /** Size of the steps that this bubble releases. It multiplies the standard size: 1 is standard. */
+  stepSize: number
   /** Wide screens: the form is on the left, the bubbles are on the center and right. */
   wide: BubblePlacement
   /** Tall or narrow screens: the form is under the bubbles. */
@@ -156,6 +193,7 @@ export interface BubbleTheme {
   glass: GlassLook
   motion: MotionSettings
   backdrop: BackdropLook
+  text: TextSettings
   distant: DistantBubbles
   bubbles: BubbleDefinition[]
 }
@@ -177,10 +215,19 @@ export const FALLBACK_BUBBLE_THEME: BubbleTheme = {
   },
   motion: { drift: 1, ripple: 1, colorFlow: 1, mouse: 1 },
   backdrop: { beamColor: '#ffb48a', beamStrength: 0.7, metallic: 0.15, bubbleGlow: 0.6, links: 0.3 },
-  distant: { opacity: 0.7, colors: ['#3b82f6', '#8b5cf6', '#ec4899'] },
+  text: {
+    size: 1,
+    weight: 600,
+    shadow: 1,
+    seconds: 4,
+    color: '#ffffff',
+    headline: 'Tarefas grandes viram tarefinhas.',
+  },
+  distant: { opacity: 0.7, colors: ['#3b82f6', '#8b5cf6', '#ec4899'], sizes: [1, 1, 1] },
   bubbles: [
     {
       id: 'study',
+      stepSize: 1,
       tones: { color: '#06b6d4', light: '#4ade80', deep: '#0284c7' },
       task: { name: 'Estudar para a prova', steps: ['ler o capítulo 3', 'fazer os exercícios', 'revisar o resumo'] },
       wide: { x: 0.3, y: -0.2, z: -0.6, r: 0.33 },
@@ -188,6 +235,7 @@ export const FALLBACK_BUBBLE_THEME: BubbleTheme = {
     },
     {
       id: 'party',
+      stepSize: 1,
       tones: { color: '#f97316', light: '#fbbf24', deep: '#f43f5e' },
       task: { name: 'Festa da Bia', steps: ['convidar a turma', 'encomendar o bolo', 'decorar a sala'] },
       wide: { x: 0.07, y: 0.27, z: -1, r: 0.17 },
@@ -195,6 +243,7 @@ export const FALLBACK_BUBBLE_THEME: BubbleTheme = {
     },
     {
       id: 'paint',
+      stepSize: 1,
       tones: { color: '#8b5cf6', light: '#e879f9', deep: '#4f46e5' },
       task: { name: 'Pintar o quarto', steps: ['comprar tinta', 'lixar a parede', 'passar a tinta'] },
       wide: { x: -0.02, y: -0.08, z: 0, r: 0.15 },
@@ -202,6 +251,7 @@ export const FALLBACK_BUBBLE_THEME: BubbleTheme = {
     },
     {
       id: 'trip',
+      stepSize: 1,
       tones: { color: '#ec4899', light: '#fb923c', deep: '#be185d' },
       task: { name: 'Organizar a viagem', steps: ['comprar passagens', 'reservar o hotel', 'fazer a mala'] },
       wide: { x: 0.06, y: -0.5, z: -1.4, r: 0.16 },
@@ -265,6 +315,7 @@ function freeBubbleId(usedIds: ReadonlySet<string>): string {
 const BLANK_BUBBLE: Omit<BubbleDefinition, 'id'> = {
   tones: { color: '#ec4899', light: '#fb923c', deep: '#be185d' },
   task: { name: 'Nova tarefa', steps: ['primeiro passo', 'segundo passo', 'terceiro passo'] },
+  stepSize: 1,
   wide: { x: 0.1, y: -0.32, z: -0.3, r: 0.11 },
   tall: { x: 0, y: 0.4, z: -0.3, r: 0.11 },
 }
@@ -312,6 +363,7 @@ export function validateBubbleTheme(input: unknown): BubbleTheme | null {
       id,
       tones: validTones(entry.tones, BLANK_BUBBLE.tones),
       task: validTask(entry.task, BLANK_BUBBLE.task),
+      stepSize: numberIn(entry.stepSize, STEP_SIZE_RANGE, BLANK_BUBBLE.stepSize),
       wide: rangedRecord(entry.wide, PLACEMENT_RANGES, BLANK_BUBBLE.wide),
       tall: rangedRecord(entry.tall, PLACEMENT_RANGES, BLANK_BUBBLE.tall),
     })
@@ -321,6 +373,8 @@ export function validateBubbleTheme(input: unknown): BubbleTheme | null {
   const fallback = FALLBACK_BUBBLE_THEME
   const distant = isRecord(input.distant) ? input.distant : {}
   const distantColors = Array.isArray(distant.colors) ? distant.colors : []
+  const distantSizes = Array.isArray(distant.sizes) ? distant.sizes : []
+  const text = isRecord(input.text) ? input.text : {}
   return {
     version: BUBBLE_THEME_VERSION,
     glass: rangedRecord(input.glass, GLASS_RANGES, fallback.glass),
@@ -336,6 +390,16 @@ export function validateBubbleTheme(input: unknown): BubbleTheme | null {
         colorOr(distantColors[1], fallback.distant.colors[1]),
         colorOr(distantColors[2], fallback.distant.colors[2]),
       ],
+      sizes: [
+        numberIn(distantSizes[0], DISTANT_SIZE_RANGE, fallback.distant.sizes[0]),
+        numberIn(distantSizes[1], DISTANT_SIZE_RANGE, fallback.distant.sizes[1]),
+        numberIn(distantSizes[2], DISTANT_SIZE_RANGE, fallback.distant.sizes[2]),
+      ],
+    },
+    text: {
+      ...rangedRecord<keyof TextNumbers>(text, TEXT_RANGES, fallback.text),
+      color: colorOr(text.color, fallback.text.color),
+      headline: textOr(text.headline, HEADLINE_MAX_LENGTH, fallback.text.headline),
     },
     bubbles,
   }
@@ -398,6 +462,7 @@ export function addBubble(theme: BubbleTheme): BubbleTheme {
     id: freeBubbleId(new Set(theme.bubbles.map((existing) => existing.id))),
     tones: { ...tones },
     task: { name: BLANK_BUBBLE.task.name, steps: [...BLANK_BUBBLE.task.steps] },
+    stepSize: BLANK_BUBBLE.stepSize,
     wide: {
       ...BLANK_BUBBLE.wide,
       ...freestSlot(

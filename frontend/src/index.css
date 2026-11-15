@@ -144,13 +144,14 @@
   place-items: center;
   text-align: center;
   font-family: var(--font-sans);
-  font-weight: 600;
+  /* Weight, color and shadow come from the theme (the admin page): the scene sets these 3 variables. */
+  font-weight: var(--bubble-text-weight, 600);
   line-height: 1.15;
   /* White text over the saturated center of the bubble. A soft dark shadow keeps it clear on lighter parts. */
-  color: #ffffff;
+  color: var(--bubble-text-color, #ffffff);
   text-shadow:
-    0 1px 2px rgb(15 12 40 / 0.3),
-    0 2px 12px rgb(15 12 40 / 0.25);
+    0 1px 2px rgb(15 12 40 / calc(0.3 * var(--bubble-text-shadow, 1))),
+    0 2px 12px rgb(15 12 40 / calc(0.25 * var(--bubble-text-shadow, 1)));
   text-wrap: balance;
   user-select: none;
 }
@@ -181,7 +182,6 @@
 
 /* When all steps are out, the bubble shows the task name. */
 .bubble-task-name {
-  font-weight: 600;
   letter-spacing: -0.01em;
 }
 

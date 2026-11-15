@@ -1,3 +1,4 @@
+import { Undo2 } from 'lucide-react'
 import { lazy, Suspense, useRef, useState } from 'react'
 import type { HomeBackdropHandle } from '@/components/HomeBackdrop'
 import { SignInForm } from '@/components/SignInForm'
@@ -85,13 +86,15 @@ export function HomeView({ bubbleTheme = DEFAULT_BUBBLE_THEME }: HomeViewProps) 
           >
             tarefinhas
           </p>
-          {/* Wide screens only: on a phone the bubbles and the form use all the room. */}
-          <p
-            data-bubble-avoid
-            className="hidden max-w-[340px] text-right font-display text-[42px] leading-[1.04] font-normal tracking-[-0.03em] text-balance text-ink/85 lg:block"
-          >
-            Tarefas grandes viram tarefinhas.
-          </p>
+          {/* Wide screens only: on a phone the bubbles and the form use all the room. The text is in the theme. */}
+          {bubbleTheme.text.headline && (
+            <p
+              data-bubble-avoid
+              className="hidden max-w-[340px] text-right font-display text-[42px] leading-[1.04] font-normal tracking-[-0.03em] text-balance text-ink/85 lg:block"
+            >
+              {bubbleTheme.text.headline}
+            </p>
+          )}
         </header>
 
         <main className="flex flex-1 items-end pt-[34dvh] lg:items-center lg:pt-0">
@@ -131,9 +134,11 @@ export function HomeView({ bubbleTheme = DEFAULT_BUBBLE_THEME }: HomeViewProps) 
           <button
             type="button"
             onClick={() => backdrop.current?.returnSteps()}
-            className="fixed right-6 bottom-6 h-11 rounded-full bg-white/85 px-5 text-sm font-medium text-ink shadow-[0_1px_2px_rgb(31_28_51/0.08),0_8px_24px_rgb(31_28_51/0.12)] backdrop-blur-md transition-colors hover:bg-white focus-visible:ring-3 focus-visible:ring-brand/30 focus-visible:outline-none"
+            aria-label="Recolher os balõezinhos"
+            title="Recolher os balõezinhos"
+            className="fixed right-6 bottom-6 grid size-11 place-items-center rounded-xl bg-white/85 text-ink shadow-[0_1px_2px_rgb(31_28_51/0.08),0_8px_24px_rgb(31_28_51/0.12)] backdrop-blur-md transition-colors hover:bg-white focus-visible:ring-3 focus-visible:ring-brand/30 focus-visible:outline-none"
           >
-            Recolher os balõezinhos
+            <Undo2 aria-hidden="true" className="size-5" />
           </button>
         )}
       </div>
