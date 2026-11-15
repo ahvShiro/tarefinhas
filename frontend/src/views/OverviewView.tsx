@@ -59,10 +59,11 @@ export function OverviewView() {
 
     const miniTaskId = String(event.active.id)
     const target = parseDropId(String(event.over.id))
-    if (!target) return
     const miniTask = miniTasks.find((candidate) => candidate.id === miniTaskId)
+    // Only miniTasks are scheduled: a MainTask node only moves inside the bank.
+    if (!target || !miniTask) return
     // Dropped back in the bank: it only moved inside the graph.
-    if (target.kind === 'bank' && miniTask && isInTaskBank(miniTask)) return
+    if (target.kind === 'bank' && isInTaskBank(miniTask)) return
     if (target.kind === 'bank') void unscheduleMiniTask(miniTaskId)
     if (target.kind === 'day') void scheduleMiniTask(miniTaskId, target.date)
     if (target.kind === 'slot') void scheduleMiniTask(miniTaskId, target.date, target.time)

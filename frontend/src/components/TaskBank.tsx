@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useDndMonitor, useDroppable, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core'
+import { useDndMonitor, useDraggable, useDroppable, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core'
 import {
   Handle,
   Position,
@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { cn } from '@/lib/utils'
-import { buildBankGraph } from '@/models/bankGraph'
+import { buildBankGraph, type BankGraphNode } from '@/models/bankGraph'
 import type { MainTask } from '@/models/mainTask'
 import { isInTaskBank, type MiniTask } from '@/models/miniTask'
 import { TASK_BANK_DROP_ID } from '@/views/dropTargets'
@@ -30,6 +30,23 @@ type MiniTaskNodeData = {
 }
 
 type MiniTaskNode = Node<MiniTaskNodeData, 'miniTask'>
+
+type MainTaskNodeData = {
+  mainTask: MainTask
+  color: string
+}
+
+type MainTaskNode = Node<MainTaskNodeData, 'mainTask'>
+
+type BankNode = MiniTaskNode | MainTaskNode
+
+// Collision radius: half the card width plus a margin, so cards never overlap.
+const MINI_TASK_RADIUS = 100 // `w-44` card: 176 px
+const MAIN_TASK_RADIUS = 135 // `w-60` card: 240 px
+
+function radiusOf(node: BankGraphNode) {
+  return node.kind === 'mainTask' ? MAIN_TASK_RADIUS : MINI_TASK_RADIUS
+}
 
 // Both handles sit at the card center, so a link goes from center to center, as in the Obsidian graph.
 const centerHandle = { opacity: 0, pointerEvents: 'none', top: '50%', left: '50%' } as const
@@ -54,7 +71,29 @@ function MiniTaskNodeView({ data }: NodeProps<MiniTaskNode>) {
   )
 }
 
-const nodeTypes = { miniTask: MiniTaskNodeView }
+/** The MainTask in the middle of its miniTasks. It can be pulled around the bank, but not scheduled. */
+function MainTaskNodeView({ id, data }: NodeProps<MainTaskNode>) {
+  const { attributes, listeners, setNodeRef } = useDraggable({ id })
+
+  return (
+    <>
+      <Handle type="target" position={Position.Left} isConnectable={false} style={centerHandle} />
+      <div
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+        aria-label={`Tarefa: ${data.mainTask.name}`}
+        className="nodrag nopan pointer-events-auto w-60 cursor-grab touch-none rounded-xl border-2 px-4 py-3 text-center font-heading text-base font-semibold break-words shadow-md outline-none"
+        style={{ borderColor: data.color, backgroundColor: `color-mix(in srgb, ${data.color} 30%, var(--card))` }}
+      >
+        {data.mainTask.name}
+      </div>
+      <Handle type="source" position={Position.Right} isConnectable={false} style={centerHandle} />
+    </>
+  )
+}
+
+const nodeTypes = { miniTask: MiniTaskNodeView, mainTask: MainTaskNodeView }
 
 const FIT_OPTIONS = { padding: 0.2, maxZoom: 1 }
 
@@ -76,24 +115,24 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
   const reducedMotion = usePrefersReducedMotion()
   const graph = useMemo(() => buildBankGraph(mainTasks, miniTasks), [mainTasks, miniTasks])
   const shape = useMemo(
-    () => ({ nodeIds: graph.nodes.map((node) => node.miniTask.id), links: graph.links }),
+    () => ({ nodes: graph.nodes.map((node) => ({ id: node.id, radius: radiusOf(node) })), links: graph.links }),
     [graph],
   )
 
   // The camera fits the graph once, when it first settles. Later the user's pan and zoom stay.
   const fitted = useRef(false)
   const onSettle = useCallback(() => {
-    if (fitted.current || shape.nodeIds.length === 0) return
+    if (fitted.current || shape.nodes.length === 0) return
     fitted.current = true
     void fitView({ ...FIT_OPTIONS, duration: 300 })
-  }, [fitView, shape.nodeIds.length])
+  }, [fitView, shape.nodes.length])
 
   const { positions, pin, release, spawnAt } = useBankSimulation(shape, { reducedMotion, onSettle })
   const [held, setHeld] = useState<Held | null>(null)
   // Card sizes measured by React Flow. It hides a node until it has a size, and every physics tick passes new
   // node objects, so the sizes must go back into them.
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({})
-  const onNodesChange = useCallback((changes: NodeChange<MiniTaskNode>[]) => {
+  const onNodesChange = useCallback((changes: NodeChange<BankNode>[]) => {
     const sizes = changes.flatMap((change) =>
       change.type === 'dimensions' && change.dimensions ? [[change.id, change.dimensions] as const] : [],
     )
@@ -149,18 +188,29 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
 
   const nodes = useMemo(
     () =>
-      graph.nodes.flatMap(({ miniTask, color }): MiniTaskNode[] => {
-        const position = positions.get(miniTask.id)
+      graph.nodes.flatMap((node): BankNode[] => {
+        const position = positions.get(node.id)
         if (!position) return []
+        if (node.kind === 'mainTask') {
+          return [
+            {
+              id: node.id,
+              type: 'mainTask',
+              position,
+              measured: measured[node.id],
+              data: { mainTask: node.mainTask, color: node.color },
+            },
+          ]
+        }
         // Over the bank the held card itself moves; outside it, it stays faded while the copy follows the pointer.
-        const ghost = held?.id === miniTask.id ? !held.overBank : true
+        const ghost = held?.id === node.id ? !held.overBank : true
         return [
           {
-            id: miniTask.id,
+            id: node.id,
             type: 'miniTask',
             position,
-            measured: measured[miniTask.id],
-            data: { miniTask, color, ghost, onOpen, onToggleDone },
+            measured: measured[node.id],
+            data: { miniTask: node.miniTask, color: node.color, ghost, onOpen, onToggleDone },
           },
         ]
       }),

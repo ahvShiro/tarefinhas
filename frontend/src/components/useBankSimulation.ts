@@ -13,12 +13,11 @@ import {
 } from 'd3-force'
 
 // Physics of the task bank, after the Obsidian graph. Distances are in flow units (1 = 1 px at zoom 1).
-const LINK_DISTANCE = 210 // linked miniTasks rest about this far apart, center to center
+const LINK_DISTANCE = 250 // a miniTask rests about this far from its MainTask, center to center
 const LINK_STRENGTH = 0.6
 const CHARGE = -600 // every miniTask pushes the others away
 const CHARGE_REACH = 800 // ...but only up to this distance, so far groups do not drift away forever
 const GRAVITY = 0.05 // weak pull toward the center: keeps the groups together
-const COLLIDE_RADIUS = 100 // a card is 176 px wide (`w-44`): cards never overlap
 const DRAG_HEAT = 0.3 // the graph keeps moving while a card is held
 const REHEAT = 0.3 // how much the graph moves when a miniTask enters or leaves
 const SPAWN_JITTER = 30
@@ -26,6 +25,8 @@ const REDUCED_MOTION_TICKS = 300
 
 interface PhysicsNode extends SimulationNodeDatum {
   id: string
+  /** Half the card width, plus a margin: cards never overlap. */
+  radius: number
 }
 
 type PhysicsLink = SimulationLinkDatum<PhysicsNode>
@@ -36,7 +37,7 @@ export interface Point {
 }
 
 interface GraphShape {
-  nodeIds: string[]
+  nodes: { id: string; radius: number }[]
   links: { source: string; target: string }[]
 }
 
@@ -51,7 +52,7 @@ function jitter() {
  * without animation.
  */
 export function useBankSimulation(
-  { nodeIds, links }: GraphShape,
+  { nodes, links }: GraphShape,
   { reducedMotion, onSettle }: { reducedMotion: boolean; onSettle: () => void },
 ) {
   const [positions, setPositions] = useState<ReadonlyMap<string, Point>>(() => new Map())
@@ -63,13 +64,14 @@ export function useBankSimulation(
 
   // Only a change in nodes or links restarts the physics, not a new array with the same content.
   const signature = useMemo(
-    () => `${nodeIds.join(',')}#${links.map((link) => `${link.source}>${link.target}`).join(',')}`,
-    [nodeIds, links],
+    () =>
+      `${nodes.map((node) => `${node.id}:${node.radius}`).join(',')}#${links.map((link) => `${link.source}>${link.target}`).join(',')}`,
+    [nodes, links],
   )
-  const shapeRef = useRef<GraphShape>({ nodeIds, links })
+  const shapeRef = useRef<GraphShape>({ nodes, links })
   const onSettleRef = useRef(onSettle)
   useEffect(() => {
-    shapeRef.current = { nodeIds, links }
+    shapeRef.current = { nodes, links }
     onSettleRef.current = onSettle
   })
 
@@ -89,7 +91,7 @@ export function useBankSimulation(
       .force('charge', forceManyBody<PhysicsNode>().strength(CHARGE).distanceMax(CHARGE_REACH))
       .force('x', forceX<PhysicsNode>(0).strength(GRAVITY))
       .force('y', forceY<PhysicsNode>(0).strength(GRAVITY))
-      .force('collide', forceCollide<PhysicsNode>(COLLIDE_RADIUS))
+      .force('collide', forceCollide<PhysicsNode>((node) => node.radius))
       .stop()
     simulation.on('tick', publish)
     simulation.on('end', () => onSettleRef.current())
@@ -106,17 +108,18 @@ export function useBankSimulation(
   useEffect(() => {
     const simulation = simulationRef.current
     if (!simulation) return
-    const { nodeIds: ids, links: graphLinks } = shapeRef.current
+    const { nodes: graphNodes, links: graphLinks } = shapeRef.current
     const known = nodesRef.current
     const next = new Map<string, PhysicsNode>()
 
-    for (const id of ids) {
+    for (const { id, radius } of graphNodes) {
       const existing = known.get(id)
       if (existing) {
+        existing.radius = radius
         next.set(id, existing)
         continue
       }
-      const node: PhysicsNode = { id }
+      const node: PhysicsNode = { id, radius }
       const spawn = spawnRef.current.get(id)
       spawnRef.current.delete(id)
       const partnerId = graphLinks.find((link) => link.source === id || link.target === id)
