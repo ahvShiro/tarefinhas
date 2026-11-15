@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { addDays, format, startOfToday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { DEFAULT_FOCUS_DAYS, MAX_FOCUS_DAYS, MIN_FOCUS_DAYS, parseFocusDays } from '@/models/focus'
 import type { MainTask } from '@/models/mainTask'
 import type { MiniTask } from '@/models/miniTask'
 import { dayDropId, slotDropId } from '@/views/dropTargets'
 import { DraggableMiniTask } from './DraggableMiniTask'
 import { FocusSlot } from './FocusSlot'
 
-const DAY_COUNT = 7
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
 const FIRST_VISIBLE_HOUR = 8
 
@@ -25,14 +27,17 @@ function hourLabel(hour: number): string {
 export function FocusArea({ miniTasks, getMainTask, onOpen, onToggleDone }: FocusAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const hourRowRef = useRef<HTMLDivElement>(null)
+  const [dayCount, setDayCount] = useState(DEFAULT_FOCUS_DAYS)
+  // What the field shows while typing; dayCount changes only on a valid value.
+  const [dayCountDraft, setDayCountDraft] = useState(String(DEFAULT_FOCUS_DAYS))
 
   const days = useMemo(() => {
     const today = startOfToday()
-    return Array.from({ length: DAY_COUNT }, (_, offset) => {
+    return Array.from({ length: dayCount }, (_, offset) => {
       const date = addDays(today, offset)
       return { key: format(date, 'yyyy-MM-dd'), label: format(date, 'EEE dd/MM', { locale: ptBR }) }
     })
-  }, [])
+  }, [dayCount])
 
   // Key: `${date}` for slots without time, `${date} ${HH:00}` for hour slots.
   const bySlot = useMemo(() => {
@@ -71,9 +76,35 @@ export function FocusArea({ miniTasks, getMainTask, onOpen, onToggleDone }: Focu
 
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card">
-      <h2 className="border-b px-4 py-2 font-heading font-medium">Em foco</h2>
+      <header className="flex items-center justify-between gap-3 border-b px-4 py-2">
+        <h2 className="font-heading font-medium">Em foco</h2>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="focus-days" className="text-xs font-normal text-muted-foreground">
+            Dias
+          </Label>
+          <Input
+            id="focus-days"
+            type="number"
+            inputMode="numeric"
+            min={MIN_FOCUS_DAYS}
+            max={MAX_FOCUS_DAYS}
+            step={1}
+            value={dayCountDraft}
+            onChange={(event) => {
+              setDayCountDraft(event.target.value)
+              const parsed = parseFocusDays(event.target.value)
+              if (parsed !== null) setDayCount(parsed)
+            }}
+            onBlur={() => setDayCountDraft(String(dayCount))}
+            className="h-7 w-14 px-2 text-sm"
+          />
+        </div>
+      </header>
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto">
-        <div className="grid min-w-max grid-cols-[3.5rem_repeat(7,minmax(8rem,1fr))]">
+        <div
+          className="grid min-w-max"
+          style={{ gridTemplateColumns: `3.5rem repeat(${dayCount}, minmax(8rem, 1fr))` }}
+        >
           <div className="sticky top-0 left-0 z-20 border-b bg-card" />
           {days.map((day) => (
             <div

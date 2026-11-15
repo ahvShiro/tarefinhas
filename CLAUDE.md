@@ -12,7 +12,10 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 
 ## Interface (ajustes sobre a spec)
 
-- Tela única: banco de tarefas à esquerda, área "Em foco" à direita. "Em foco" é a agenda da spec (7 dias a partir de hoje, faixa sem hora + faixas de 1h).
+- Tela única: "Em foco" numa barra estreita à esquerda (1/4 da largura, mínimo 18rem), banco de tarefas à direita. No celular, empilhados, "Em foco" primeiro. "Em foco" é a agenda da spec (faixa sem hora + faixas de 1h), mas mostra só hoje por padrão. O campo "Dias" mostra de 1 a 7 dias a partir de hoje (`models/focus.ts`). A escolha não fica salva.
+- Banco de tarefas como o grafo do Obsidian: as miniTasks ligadas se atraem, as outras se afastam, e uma gravidade fraca puxa tudo para o centro. O grafo se mexe ao abrir, ao arrastar e quando uma miniTask entra ou sai; depois para. As posições não ficam salvas: a física recalcula ao abrir. Com `prefers-reduced-motion`, o grafo aparece já arranjado.
+- Um gesto só para mover e agendar: arrastar um card dentro do banco puxa o card (os ligados vêm atrás). Se o ponteiro sai do banco, o card fica apagado no lugar e uma cópia segue o ponteiro até o "Em foco". Soltar no banco deixa o card ali; uma miniTask que volta do "Em foco" aparece onde foi solta.
+- Fundo de pontos do banco fixo: o pan e o zoom movem só os cards e as linhas.
 - MiniTasks arrastam entre banco e foco, e dentro do foco.
 - Botão "Nova tarefa" abre o formulário de cadastro num modal.
 - Cor da `MainTask` sorteada entre as cores livres da paleta (`models/colors.ts`). Repete só quando a paleta esgota.
@@ -66,7 +69,7 @@ Spring MVC padrão: `controller` (REST), `service` (regras de negócio), `reposi
 - Vite + React 19 + TypeScript, PWA via `vite-plugin-pwa`
 - Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) (preset Nova, base Radix). Adicionar componente: `npx shadcn@latest add <nome>`
 - IndexedDB via `idb`
-- `@xyflow/react` (React Flow): grafo do banco. `@dnd-kit/core`: arrastar. `date-fns`: datas
+- `@xyflow/react` (React Flow): desenha o grafo do banco. `d3-force`: física do banco. `@dnd-kit/core`: arrastar. `date-fns`: datas
 - Gerenciador de pacotes: npm
 
 ### Backend (API)
@@ -90,6 +93,8 @@ Monorepo:
 ## Notas de implementação
 
 - Banco de tarefas: React Flow com `nodesDraggable={false}`. O arraste é do dnd-kit; o cartão arrastável usa a classe `nodrag nopan` para o React Flow não panear.
+- Física do banco: `components/useBankSimulation.ts` (`d3-force`) calcula as posições; o React Flow só desenha (`nodeOrigin` no centro, alças no centro do card, linhas retas). As ligações vêm de `models/bankGraph.ts`. Durante o arraste, `TaskBank` usa `useDndMonitor` para prender o card no ponteiro (`fx`/`fy`); `OverviewView` esconde o `DragOverlay` enquanto um card do banco está sobre o banco. A câmera faz `fitView` só na primeira vez que o grafo assenta.
+- Fundo de pontos do banco em CSS no contêiner, não o `<Background />` do React Flow (que acompanha o pan).
 - IDs dos alvos de soltura em `src/views/dropTargets.ts`: `bank`, `day:YYYY-MM-DD`, `slot:YYYY-MM-DD:HH`.
 - Clique vs. arraste: `PointerSensor` com `distance: 5`. Clique logo depois de um drop é ignorado para não abrir o modal de detalhe.
 
@@ -104,6 +109,8 @@ Registrar aqui decisões tomadas ao longo do desenvolvimento (data + decisão + 
 - 2026-11-11 — Balão vira `MiniTask`: nomes pela função, não pela forma. Agenda vira área "Em foco" (`Focus`), mesmo comportamento.
 - 2026-11-11 — Monorepo `frontend/` + `backend/`; npm; sem testes automatizados nesta fase (critérios validados à mão).
 - 2026-11-11 — Formulário em modal; cores sorteadas sem repetir; modal de detalhe ao clicar na miniTask.
+- 2026-11-15 — "Em foco" vira barra estreita à esquerda e o banco vai para a direita. "Em foco" mostra só hoje por padrão, com campo de 1 a 7 dias. Motivo: o foco do dia fica à vista e o banco ganha espaço.
+- 2026-11-15 — Banco de tarefas como o grafo do Obsidian, com física (`d3-force`) e fundo fixo. Um gesto só para mover no banco e agendar no "Em foco". Posições não salvas; o grafo assenta e para. Motivo: o banco deve mostrar as tarefas ligadas e vivas, não uma grade.
 
 ## Pendências a definir
 

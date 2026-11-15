@@ -9,9 +9,18 @@ interface DraggableMiniTaskProps {
   onOpen: (miniTaskId: string) => void
   onToggleDone: (miniTaskId: string) => void
   compact?: boolean
+  /** Fades the card while it is dragged (a copy follows the pointer). False when the card itself moves. */
+  ghost?: boolean
 }
 
-export function DraggableMiniTask({ miniTask, color, onOpen, onToggleDone, compact }: DraggableMiniTaskProps) {
+export function DraggableMiniTask({
+  miniTask,
+  color,
+  onOpen,
+  onToggleDone,
+  compact,
+  ghost = true,
+}: DraggableMiniTaskProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: miniTask.id })
 
   return (
@@ -20,7 +29,7 @@ export function DraggableMiniTask({ miniTask, color, onOpen, onToggleDone, compa
       {...attributes}
       {...listeners}
       // nodrag/nopan: keeps React Flow from panning when a drag starts on the card.
-      className={cn('nodrag nopan cursor-grab touch-none outline-none', isDragging && 'opacity-30')}
+      className={cn('nodrag nopan cursor-grab touch-none outline-none', isDragging && ghost && 'opacity-30')}
       onClick={() => onOpen(miniTask.id)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') onOpen(miniTask.id)

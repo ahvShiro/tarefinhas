@@ -6,6 +6,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { PlusIcon } from 'lucide-react'
@@ -16,7 +17,8 @@ import { MiniTaskCard } from '@/components/MiniTaskCard'
 import { MiniTaskDetailDialog } from '@/components/MiniTaskDetailDialog'
 import { TaskBank } from '@/components/TaskBank'
 import { useTasks } from '@/controllers/useTasks'
-import { parseDropId } from './dropTargets'
+import { isInTaskBank } from '@/models/miniTask'
+import { parseDropId, TASK_BANK_DROP_ID } from './dropTargets'
 
 // A click right after a drop must not open the detail dialog.
 const CLICK_AFTER_DRAG_GUARD_MS = 150
@@ -27,6 +29,7 @@ export function OverviewView() {
   const [formOpen, setFormOpen] = useState(false)
   const [detailMiniTaskId, setDetailMiniTaskId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [overBank, setOverBank] = useState(false)
   const lastDragEndAt = useRef(0)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
@@ -39,7 +42,14 @@ export function OverviewView() {
   const handleToggleDone = useCallback((miniTaskId: string) => void toggleDone(miniTaskId), [toggleDone])
 
   function handleDragStart(event: DragStartEvent) {
-    setDraggingId(String(event.active.id))
+    const miniTaskId = String(event.active.id)
+    setDraggingId(miniTaskId)
+    const miniTask = miniTasks.find((candidate) => candidate.id === miniTaskId)
+    setOverBank(miniTask !== undefined && isInTaskBank(miniTask))
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setOverBank(event.over?.id === TASK_BANK_DROP_ID)
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -50,6 +60,9 @@ export function OverviewView() {
     const miniTaskId = String(event.active.id)
     const target = parseDropId(String(event.over.id))
     if (!target) return
+    const miniTask = miniTasks.find((candidate) => candidate.id === miniTaskId)
+    // Dropped back in the bank: it only moved inside the graph.
+    if (target.kind === 'bank' && miniTask && isInTaskBank(miniTask)) return
     if (target.kind === 'bank') void unscheduleMiniTask(miniTaskId)
     if (target.kind === 'day') void scheduleMiniTask(miniTaskId, target.date)
     if (target.kind === 'slot') void scheduleMiniTask(miniTaskId, target.date, target.time)
@@ -57,6 +70,8 @@ export function OverviewView() {
 
   const dragging = miniTasks.find((miniTask) => miniTask.id === draggingId)
   const draggingColor = dragging ? getMainTask(dragging.mainTaskId)?.color : undefined
+  // A bank card held over the bank moves itself in the graph, so the copy under the pointer is not needed.
+  const showOverlay = dragging !== undefined && !(isInTaskBank(dragging) && overBank)
   const detailMiniTask = miniTasks.find((miniTask) => miniTask.id === detailMiniTaskId)
   const detailMainTask = detailMiniTask ? getMainTask(detailMiniTask.mainTaskId) : undefined
 
@@ -76,20 +91,21 @@ export function OverviewView() {
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
           onDragCancel={() => setDraggingId(null)}
         >
-          <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[2fr_3fr]">
-            <TaskBank mainTasks={mainTasks} miniTasks={miniTasks} onOpen={openDetail} onToggleDone={handleToggleDone} />
+          <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_3fr]">
             <FocusArea
               miniTasks={miniTasks}
               getMainTask={getMainTask}
               onOpen={openDetail}
               onToggleDone={handleToggleDone}
             />
+            <TaskBank mainTasks={mainTasks} miniTasks={miniTasks} onOpen={openDetail} onToggleDone={handleToggleDone} />
           </main>
           <DragOverlay dropAnimation={null}>
-            {dragging && draggingColor && <MiniTaskCard miniTask={dragging} color={draggingColor} compact />}
+            {showOverlay && dragging && draggingColor && <MiniTaskCard miniTask={dragging} color={draggingColor} compact />}
           </DragOverlay>
         </DndContext>
       )}
