@@ -24,8 +24,8 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 
 ## Homepage (entrar e criar conta)
 
-- Primeira tela do app (`views/HomeView.tsx`). Abas "Entrar" e "Criar conta" no mesmo painel. A aba ativa fica na URL: `?mode=sign-up`.
-- Só interface: dados válidos entram no app sem conferir conta. A sessão fica na memória, então recarregar a página volta para a homepage. A autenticação real entra no `AuthProvider`, entre a validação e `setSignedIn`, quando o backend especificar login.
+- Primeira tela do app (`views/HomeView.tsx`), em `/`. Abas "Entrar" e "Criar conta" no mesmo painel. A aba ativa fica na URL: `?mode=sign-up` (`useSearchParams`).
+- Sem login por enquanto: "Entrar" e "Criar conta" levam direto para `/tarefas`, sem conferir o formulário nem conta. `/tarefas` abre sem login. Quando o backend especificar login, a validação (`validateSignIn`/`validateSignUp` em `models/auth.ts`) e a chamada da API entram no `AuthProvider`.
 - Entrar: e-mail e senha. Criar conta: nome, e-mail, senha (mínimo 8 caracteres) e confirmar senha. Regras em `models/auth.ts`.
 - "Esqueci a senha" e "Continuar com Google" mostram um aviso de que ainda não estão disponíveis.
 - Layout sem divisão de colunas: fundo 3D na tela toda, formulário por cima, à esquerda (no celular, abaixo das bolhas).
@@ -39,7 +39,7 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 - O arranjo das bolhas segue o layout da página. Abaixo de 1024 px de largura (Tailwind `lg`, formulário embaixo das bolhas) ou em tela alta, usa o lugar `tall` de cada bolha: bolhas na faixa de cima, tamanho limitado pela altura (`tallUnit`), e só decoração, sem separar passos, sem cursor de pegar e sem dica. A partir de 1024 px, de toque ou não, separa normalmente. Se mudar o breakpoint do formulário em `HomeView`, mudar `STACKED_MAX_WIDTH` junto.
 - O ponteiro é lido na janela inteira (o formulário fica por cima do canvas) e convertido para coordenadas do canvas, então funciona com a página rolada. Cliques em campos, botões, links e no formulário não pegam bolhas.
 - Desempenho: esfera com 64 segmentos (a deformação roda por vértice, a cada quadro), sem luzes e sem transmissão de vidro (o shader não usa nenhum dos 2), densidade de pixels máxima 1,5 e `PerformanceMonitor`, que baixa a resolução em aparelhos lentos.
-- O mouse empurra as bolhas próximas, e a bolha sob o mouse cresce um pouco e ondula mais. Carrega em arquivo separado (`lazy`), depois do formulário. `prefers-reduced-motion` deixa a cena parada. Sem WebGL, a cena não aparece e o formulário funciona.
+- O mouse empurra as bolhas próximas, e a bolha sob o mouse cresce um pouco e ondula mais. Carrega em arquivo separado (`lazy`), depois do formulário. `prefers-reduced-motion` deixa a cena parada. Sem WebGL, a cena não aparece e o formulário funciona (`BackdropBoundary` segura o erro da cena).
 - Composição no desktop: frase de marca grande no canto de cima à direita ("Tarefas grandes viram tarefinhas.", em `HomeView`, só a partir de `lg`, com `data-bubble-avoid`), 4 bolhas grandes (a maior e a de baixo cortadas pela borda da tela) e 3 bolhas distantes bem desfocadas. Um grão fino cobre a cena (`.home-texture` em `index.css`). No desktop nenhuma bolha distante fica perto do formulário.
 - Parede de fundo (`Wall`): quadro de tela cheia atrás de tudo, fosco, com gradiente suave e 1 facho de luz diagonal que se move bem devagar. O lado do formulário fica sem efeitos de luz (esquerda na tela larga, parte de baixo na tela alta). No tema, `backdrop`: cor e força do facho, fosco ↔ metálico (metal escovado), reflexo das bolhas e fios. Cada bolha joga uma mancha da própria cor na parede (disco desfocado atrás dela) e o brilho largo do vidro pega parte da cor do facho (`uBeam`).
 - Fios (`BubbleLinks`): linha fina de cada bolha grande para a seguinte, de borda a borda. `backdrop.links` é a opacidade; 0 remove.
@@ -51,7 +51,7 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 
 ## Convenções de nomes
 
-Todo nome no código fica em inglês: entidades, campos, variáveis, funções, componentes, arquivos, pastas, rotas, tabelas. Texto visível ao usuário fica em português.
+Todo nome no código fica em inglês: entidades, campos, variáveis, funções, componentes, arquivos, pastas, tabelas. Texto visível ao usuário fica em português. Exceção: os endereços das páginas (`/tarefas`) ficam em português, porque aparecem na barra de endereço.
 
 Nomear pela função, não pela forma visual. Ex.: `MiniTask` (passo de uma tarefa), não `Balloon` (formato do cartão).
 
@@ -83,7 +83,7 @@ Frontend e backend seguem MVC. Cada camada só conhece a camada abaixo dela: Vie
 | Camada | Responsabilidade | Onde fica |
 |---|---|---|
 | Model | Tipos, regras de domínio puras (validação, cor, agendar) e repositórios | `src/models/` |
-| Controller | `TasksProvider` (context): carrega dados, guarda estado, expõe ações. Acesso via `useTasks()`. `AuthProvider`: valida entrar/criar conta e guarda se a pessoa entrou. Acesso via `useAuth()` | `src/controllers/` |
+| Controller | `TasksProvider` (context): carrega dados, guarda estado, expõe ações. Acesso via `useTasks()`. `AuthProvider`: entrar/criar conta (hoje sempre aceita). Acesso via `useAuth()` | `src/controllers/` |
 | View | Telas e componentes React/shadcn. Só renderizam e repassam eventos ao Controller | `src/views/` (telas), `src/components/` (componentes), `src/components/ui/` (gerados pelo shadcn, não editar à mão) |
 
 - Repositórios ficam atrás das interfaces de `src/models/repositories/types.ts`. A implementação (IndexedDB hoje, API Java depois) é escolhida num único ponto: topo de `src/controllers/TasksProvider.tsx`.
@@ -100,6 +100,7 @@ Spring MVC padrão: `controller` (REST), `service` (regras de negócio), `reposi
 - Vite + React 19 + TypeScript, PWA via `vite-plugin-pwa`
 - Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) (preset Nova, base Radix). Adicionar componente: `npx shadcn@latest add <nome>`
 - IndexedDB via `idb`
+- React Router (`react-router`): rotas em `src/views/routes.ts` (`/`, `/tarefas`, `/admin` só em desenvolvimento; endereço desconhecido volta para `/`). Montadas em `App.tsx`
 - `@xyflow/react` (React Flow): desenha o grafo do banco. `d3-force`: física do banco. `@dnd-kit/core`: arrastar. `date-fns`: datas
 - Gerenciador de pacotes: npm
 
@@ -151,6 +152,7 @@ Registrar aqui decisões tomadas ao longo do desenvolvimento (data + decisão + 
 - 2026-11-15 — Banco de tarefas como o grafo do Obsidian, com física (`d3-force`) e fundo fixo. Um gesto só para mover no banco e agendar no "Em foco". Posições não salvas; o grafo assenta e para. Motivo: o banco deve mostrar as tarefas ligadas e vivas, não uma grade.
 - 2026-11-15 — Tarefa principal vira nó maior no centro do grupo, com as miniTasks ligadas nela em vez de em sequência. Motivo: o nome da tarefa fica visível no banco e o grupo se lê como um projeto.
 - 2026-11-15 — Botão de recolher passos vira um quadrado só com ícone. Admin ganha tamanho individual (bolha grande, passos soltos, bolhas de fundo) e opções de texto (tamanho, peso, sombra, cor, tempo por passo, frase de destaque). Motivo: pedido do usuário, para ajustar tudo pelo painel.
+- 2026-11-15 — React Router com `/` (homepage) e `/tarefas`. Sem login: os botões da homepage levam direto para as tarefas, sem validar. Endereços em português. Motivo: separar as telas por endereço e testar o app sem login.
 
 ## Pendências a definir
 
