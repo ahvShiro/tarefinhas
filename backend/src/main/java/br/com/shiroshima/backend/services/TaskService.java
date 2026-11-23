@@ -16,6 +16,7 @@ import br.com.shiroshima.backend.dtos.MiniTaskGroupResponse.MiniTaskSummary;
 import br.com.shiroshima.backend.models.ColorPalette;
 import br.com.shiroshima.backend.models.MainTask;
 import br.com.shiroshima.backend.models.MiniTask;
+import br.com.shiroshima.backend.models.User;
 import br.com.shiroshima.backend.repositories.MainTaskRepository;
 import br.com.shiroshima.backend.repositories.MiniTaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,11 +28,13 @@ public class TaskService {
 
     private final MainTaskRepository mainTaskRepository;
     private final MiniTaskRepository miniTaskRepository;
+    private final UserService userService;
 
-    /** All miniTasks grouped by MainTask. Keeps the query order (oldest MainTask first, steps in order). */
+    /** The signed-in user's miniTasks grouped by MainTask. Keeps the query order (oldest MainTask first, steps in order). */
     public List<MiniTaskGroupResponse> listMiniTaskGroups() {
         Map<MainTask, List<MiniTaskSummary>> groups = new LinkedHashMap<>();
-        for (MiniTask miniTask : miniTaskRepository.findAllWithMainTask()) {
+        User user = userService.fetchAuthenticatedUser();
+        for (MiniTask miniTask : miniTaskRepository.findAllWithMainTaskByUser(user)) {
             groups.computeIfAbsent(miniTask.getMainTask(), mainTask -> new ArrayList<>())
                     .add(MiniTaskSummary.from(miniTask));
         }
@@ -46,6 +49,7 @@ public class TaskService {
         Instant now = Instant.now();
 
         MainTask mainTask = new MainTask();
+        mainTask.setUser(userService.fetchAuthenticatedUser());
         mainTask.setName(request.name().trim());
         mainTask.setDescription(request.description().trim());
         mainTask.setDeadlineDays(request.deadlineDays());

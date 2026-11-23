@@ -5,16 +5,19 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import br.com.shiroshima.backend.models.MiniTask;
+import br.com.shiroshima.backend.models.User;
 
 public interface MiniTaskRepository extends JpaRepository<MiniTask, UUID> {
 
-    /** All miniTasks with their MainTask in a single query, grouped by MainTask in step order. */
+    /** The user's miniTasks with their MainTask in a single query, grouped by MainTask in step order. */
     @Query("""
             select miniTask from MiniTask miniTask
             join fetch miniTask.mainTask mainTask
+            where mainTask.user = :user
             order by mainTask.createdAt, mainTask.id, miniTask.position
             """)
-    List<MiniTask> findAllWithMainTask();
+    List<MiniTask> findAllWithMainTaskByUser(@Param("user") User user);
 }

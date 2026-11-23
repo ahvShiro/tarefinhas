@@ -25,7 +25,7 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 ## Homepage (entrar e criar conta)
 
 - Primeira tela do app (`views/HomeView.tsx`), em `/`. Abas "Entrar" e "Criar conta" no mesmo painel. A aba ativa fica na URL: `?mode=sign-up` (`useSearchParams`).
-- Sem login por enquanto: "Entrar" e "Criar conta" levam direto para `/tarefas`, sem conferir o formulário nem conta. `/tarefas` abre sem login. Quando o backend especificar login, a validação (`validateSignIn`/`validateSignUp` em `models/auth.ts`) e a chamada da API entram no `AuthProvider`.
+- Sem login por enquanto: "Entrar" e "Criar conta" levam direto para `/tarefas`, sem conferir o formulário nem conta. `/tarefas` abre sem login. O backend já tem login (`/auth/sign-in`, `/auth/sign-up`, ver "Backend"); falta o frontend chamar: a validação (`validateSignIn`/`validateSignUp` em `models/auth.ts`) e a chamada da API entram no `AuthProvider`.
 - Entrar: e-mail e senha. Criar conta: nome, e-mail, senha (mínimo 8 caracteres) e confirmar senha. Regras em `models/auth.ts`.
 - "Esqueci a senha" e "Continuar com Google" mostram um aviso de que ainda não estão disponíveis.
 - Layout sem divisão de colunas: fundo 3D na tela toda, formulário por cima, à esquerda (no celular, abaixo das bolhas).
@@ -92,7 +92,39 @@ Frontend e backend seguem MVC. Cada camada só conhece a camada abaixo dela: Vie
 
 ### Backend (Spring Boot)
 
-Spring MVC padrão: `controller` (REST), `service` (regras de negócio), `repository` (persistência), `model` (entidades), `dto` (contratos da API). Controller não acessa repository direto.
+Spring MVC padrão, pacotes no plural em `br.com.shiroshima.backend`: `controllers` (REST), `services` (regras de negócio), `repositories` (persistência), `models` (entidades), `dtos` (contratos da API), `configs` (segurança), `exceptions` (erros da API). Controller não acessa repository direto.
+
+- Construir uma camada por vez e combinar o formato da API (rotas, corpo, resposta) antes de escrever o código.
+- Entidades JPA com id `UUID` gerado pelo Hibernate (`GenerationType.UUID`) e `createdAt` (`Instant`) preenchido no service.
+- DTOs são `record`s e levam só os campos que a tela usa; campos novos entram quando forem precisos.
+- Validação com Bean Validation nos DTOs de entrada, com as mesmas regras e mensagens (em português) do frontend.
+- Formato de erro: `{ "errors": { "<campo>": "<mensagem>" } }`, igual aos `...Errors` do frontend. Erro sem campo (login errado, sessão expirada) usa a chave `form` (`ApiErrors.FORM`). Regra de negócio quebrada: `BusinessException(campo, mensagem)` → 400; conflito com dado salvo: `ConflictException` → 409. Tratados em `exceptions/ApiExceptionHandler`.
+- Cor da `MainTask` sorteada no backend (`models/ColorPalette`, cópia da paleta de `frontend/src/models/colors.ts`; manter as 2 iguais). Por enquanto sorteio simples, pode repetir cor.
+
+#### Endpoints
+
+| Método e rota | Acesso | O que faz |
+|---|---|---|
+| `POST /auth/sign-up` | aberto | Cria conta (`name`, `email`, `password`, `passwordConfirmation`) → 201 `{ token }`. A pessoa já entra logada |
+| `POST /auth/sign-in` | aberto | `email`, `password` → 200 `{ token }`. Errado → 401 `form: "E-mail ou senha incorretos."` |
+| `GET /users/me` | token | Dados do usuário logado (`id`, `name`, `email`) |
+| `PUT /users/me` | token | Edita o usuário logado. Só o `name` |
+| `GET /mini-tasks` | token | MiniTasks do usuário, agrupadas por `MainTask`: `[{ mainTask: { id, name, description, color }, miniTasks: [{ id, text, position, done, scheduledDate, scheduledTime }] }]`. Uma consulta só (`join fetch`). Tarefa mais antiga primeiro, passos em ordem |
+| `POST /main-tasks` | token | Cria `MainTask` com os passos: `{ name, description, deadlineDays?, miniTasks: [{ text }] }` → 201 com o grupo criado (mesmo formato de um item do `GET /mini-tasks`). `position` vem da ordem da lista |
+
+Os passos do formulário (`step` no frontend) são as `MiniTask`s; na API chamam `miniTasks`.
+
+#### Autenticação
+
+Reaproveitada do projeto budgie (`~/IFPR/6-PW/budgie/budgie-backend`): Spring Security sem sessão, JWT (`com.auth0:java-jwt`, HMAC256, assunto = e-mail, 24 h), senha com BCrypt, `SecurityFilter` lê `Authorization: Bearer <token>`, `ApiAuthEntryPoint` (401) e `ApiAccessDeniedHandler` (403), CORS por propriedade. Diferenças do budgie: sem papéis (`AuthRole` removido), id `UUID`, e-mail guardado sem espaços e em minúsculas, só aceita cabeçalho com prefixo `Bearer `, senha errada responde "E-mail ou senha incorretos." (não "sessão expirada"). Regra de senha do budgie: 8+ caracteres, com maiúscula, minúscula, número e caractere especial. Cada `MainTask` pertence a um `User` (`user_id`); as rotas de tarefas só veem as do usuário logado.
+
+#### Configuração (`.env`, lido pelo `docker-compose.yml`)
+
+- `DATASOURCE_URL` (formato `jdbc:postgresql://...`), `DATASOURCE_USERNAME`, `DATASOURCE_PASSWORD`. Hoje aponta para o Postgres do Neon. Com o Postgres local do compose (perfil `local-db`), o host é `postgres`, não `localhost`.
+- `TOKEN_SECRET`: segredo do JWT. Obrigatório.
+- `CORS_ALLOWED_ORIGINS`: origens liberadas, separadas por vírgula. Padrão `http://localhost:5173`.
+- Tabelas criadas e atualizadas pelo Hibernate (`spring.jpa.hibernate.ddl-auto=update`), sem Flyway.
+- Rodar: `docker compose up --build` na raiz (perfil `prod`).
 
 ## Stack
 
@@ -105,15 +137,17 @@ Spring MVC padrão: `controller` (REST), `service` (regras de negócio), `reposi
 - Gerenciador de pacotes: npm
 
 ### Backend (API)
-- Java + Spring Boot
-- Fora da base mínima da V2: a base salva tudo no navegador. A API entra quando login e sincronização forem especificados.
+- Java 21 + Spring Boot 4.1 (Web MVC, Data JPA, Validation, Security), Lombok, `com.auth0:java-jwt`
+- PostgreSQL (Neon hospedado; Postgres local opcional no compose)
+- Docker: `backend/Dockerfile` + `docker-compose.yml` na raiz
+- O frontend ainda salva tudo no navegador (IndexedDB). Ligar o frontend à API é a próxima etapa.
 
 ## Estrutura do repositório
 
 Monorepo:
 
 - `frontend/`: app React
-- `backend/`: API Spring Boot 4.1, Java 21, Maven (`./mvnw`), pacote `br.com.shiroshima.backend`. Só o esqueleto do Spring Initializr por enquanto
+- `backend/`: API Spring Boot 4.1, Java 21, Maven (`./mvnw`), pacote `br.com.shiroshima.backend`. Detalhes em "Arquitetura: MVC > Backend"
 - `docs/`: especificações
 
 ## Comandos (em `frontend/`)
@@ -153,11 +187,19 @@ Registrar aqui decisões tomadas ao longo do desenvolvimento (data + decisão + 
 - 2026-11-15 — Tarefa principal vira nó maior no centro do grupo, com as miniTasks ligadas nela em vez de em sequência. Motivo: o nome da tarefa fica visível no banco e o grupo se lê como um projeto.
 - 2026-11-15 — Botão de recolher passos vira um quadrado só com ícone. Admin ganha tamanho individual (bolha grande, passos soltos, bolhas de fundo) e opções de texto (tamanho, peso, sombra, cor, tempo por passo, frase de destaque). Motivo: pedido do usuário, para ajustar tudo pelo painel.
 - 2026-11-15 — React Router com `/` (homepage) e `/tarefas`. Sem login: os botões da homepage levam direto para as tarefas, sem validar. Endereços em português. Motivo: separar as telas por endereço e testar o app sem login.
+- 2026-11-23 — Backend começa: entidades `MainTask` e `MiniTask` iguais às do frontend, em JPA com Postgres (Neon). Pacotes no plural (`models`, `repositories`, `services`, `controllers`, `dtos`). Motivo: pedido do usuário.
+- 2026-11-23 — `GET /mini-tasks` devolve a lista agrupada por `MainTask`, com todas as miniTasks (feitas ou não) e só os campos que a tela usa, numa consulta só. Motivo: uma chamada monta o banco, o "Em foco" e o modal de detalhe; campos extras entram quando forem precisos.
+- 2026-11-23 — `POST /main-tasks` cria a tarefa com os passos como `miniTasks: [{ text }]`. O backend gera id, data e cor; validação com Bean Validation; resposta 201 com o grupo criado; erros no formato `{ errors: { campo: mensagem } }` do frontend. Motivo: a API não confia no cliente, e o formulário mostra os erros sem adaptar.
+- 2026-11-23 — Tabelas pelo Hibernate (`ddl-auto=update`), sem Flyway. Motivo: escolha do usuário nesta fase.
+- 2026-11-23 — Autenticação reaproveitada do projeto budgie (JWT sem sessão, BCrypt, mesma regra de senha forte). Só entrar, criar conta e editar o nome do usuário; recuperar senha fica para depois (precisa de e-mail). Sem papéis (`AuthRole` removido). Cada `MainTask` tem dono. Criar conta já devolve o token. Motivo: reaproveitar uma implementação conhecida; o app não tem administrador.
 
 ## Pendências a definir
 
-- Banco de dados do backend
-- Autenticação (login e sincronização, uma pessoa por conta)
+- Ligar o frontend à API (trocar o IndexedDB pelos endpoints, guardar o token, `AuthProvider` chamando `/auth/sign-in` e `/auth/sign-up`)
+- Regra de senha do frontend (`models/auth.ts`, hoje só 8 caracteres) ainda não segue a regra forte do backend
+- Passo em branco: o frontend descarta, o backend responde 400 em `miniTasks[i].text`; o formulário espera o erro em `steps`
+- Recuperar senha e trocar senha
+- Migrações de schema (hoje `ddl-auto=update`)
 - Estratégia de testes
 - Convenções de código e commits
 - Comportamento de editar e apagar tarefas e miniTasks
