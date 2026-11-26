@@ -18,11 +18,12 @@ import { AppBrand } from '@/components/AppBrand'
 import { ProfileButton } from '@/components/ProfileButton'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { MiniTaskCard } from '@/components/MiniTaskCard'
-import { AddStepDialog, DeleteMiniTaskDialog } from '@/components/MiniTaskActionDialogs'
+import { AddStepDialog, DeleteMainTaskDialog, DeleteMiniTaskDialog } from '@/components/MiniTaskActionDialogs'
 import { SetTimeDialog } from '@/components/SetTimeDialog'
 import { MiniTaskDetailDialog } from '@/components/MiniTaskDetailDialog'
 import { OverdueDialog } from '@/components/OverdueDialog'
 import { TaskBank } from '@/components/TaskBank'
+import { MainTaskMenuContext, type MainTaskMenuActions } from '@/controllers/mainTaskMenuContext'
 import { MiniTaskMenuContext, type MiniTaskMenuActions } from '@/controllers/miniTaskMenuContext'
 import { useTasks } from '@/controllers/useTasks'
 import { cn } from '@/lib/utils'
@@ -53,6 +54,9 @@ export function OverviewView() {
     copyMiniTask,
     addStep,
     deleteMiniTask,
+    duplicateMainTask,
+    deleteMainTask,
+    sendMainTaskToToday,
     setMiniTaskTime,
     overdueMiniTasks,
     postponeMiniTask,
@@ -67,8 +71,10 @@ export function OverviewView() {
   const [focusWidth, setFocusWidth] = useState<number | null>(null)
   const mainRef = useRef<HTMLElement>(null)
   const focusRef = useRef<HTMLDivElement>(null)
+  // Id of the MainTask that gets a new step.
   const [addStepFor, setAddStepFor] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteMainTaskId, setDeleteMainTaskId] = useState<string | null>(null)
   const [timeFor, setTimeFor] = useState<string | null>(null)
   const [overBank, setOverBank] = useState(false)
   const lastDragEndAt = useRef(0)
@@ -84,11 +90,22 @@ export function OverviewView() {
     () => ({
       days: upcomingDays(focusDays),
       onCopy: (miniTaskId, date) => void copyMiniTask(miniTaskId, date),
-      onAddStep: setAddStepFor,
+      onAddStep: (miniTaskId) =>
+        setAddStepFor(miniTasks.find((miniTask) => miniTask.id === miniTaskId)?.mainTaskId ?? null),
       onDelete: setDeleteId,
       onSetTime: setTimeFor,
     }),
-    [copyMiniTask, focusDays],
+    [copyMiniTask, focusDays, miniTasks],
+  )
+
+  const mainTaskMenuActions = useMemo<MainTaskMenuActions>(
+    () => ({
+      onAddStep: setAddStepFor,
+      onDuplicate: (mainTaskId) => void duplicateMainTask(mainTaskId),
+      onSendToToday: (mainTaskId) => void sendMainTaskToToday(mainTaskId),
+      onDelete: setDeleteMainTaskId,
+    }),
+    [duplicateMainTask, sendMainTaskToToday],
   )
 
   const handleToggleDone = useCallback((miniTaskId: string) => void toggleDone(miniTaskId), [toggleDone])
@@ -135,7 +152,8 @@ export function OverviewView() {
   const showOverlay = dragging !== undefined && !(isInTaskBank(dragging) && overBank)
   const detailMiniTask = miniTasks.find((miniTask) => miniTask.id === detailMiniTaskId)
   const detailMainTask = detailMiniTask ? getMainTask(detailMiniTask.mainTaskId) : undefined
-  const addStepMiniTask = miniTasks.find((miniTask) => miniTask.id === addStepFor)
+  const addStepMainTask = addStepFor === null ? undefined : getMainTask(addStepFor)
+  const deleteMainTaskTarget = deleteMainTaskId === null ? undefined : getMainTask(deleteMainTaskId)
   const timeMiniTask = miniTasks.find((miniTask) => miniTask.id === timeFor)
   const deleteMiniTaskTarget = miniTasks.find((miniTask) => miniTask.id === deleteId)
   const deleteIsLastStep =
@@ -144,6 +162,7 @@ export function OverviewView() {
 
   return (
     <MiniTaskMenuContext.Provider value={menuActions}>
+      <MainTaskMenuContext.Provider value={mainTaskMenuActions}>
       <div className="flex h-dvh flex-col gap-3 p-3">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -263,8 +282,7 @@ export function OverviewView() {
           onClose={() => setTimeFor(null)}
         />
         <AddStepDialog
-          miniTask={addStepMiniTask}
-          mainTask={addStepMiniTask ? getMainTask(addStepMiniTask.mainTaskId) : undefined}
+          mainTask={addStepMainTask}
           onSubmit={addStep}
           onClose={() => setAddStepFor(null)}
         />
@@ -275,7 +293,14 @@ export function OverviewView() {
           onConfirm={(miniTaskId) => void deleteMiniTask(miniTaskId)}
           onClose={() => setDeleteId(null)}
         />
+        <DeleteMainTaskDialog
+          mainTask={deleteMainTaskTarget}
+          steps={miniTasks.filter((miniTask) => miniTask.mainTaskId === deleteMainTaskId)}
+          onConfirm={(mainTaskId) => void deleteMainTask(mainTaskId)}
+          onClose={() => setDeleteMainTaskId(null)}
+        />
       </div>
+      </MainTaskMenuContext.Provider>
     </MiniTaskMenuContext.Provider>
   )
 }

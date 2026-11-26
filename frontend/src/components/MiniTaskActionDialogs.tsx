@@ -14,19 +14,17 @@ import type { MainTask } from '@/models/mainTask'
 import type { MiniTask } from '@/models/miniTask'
 
 interface AddStepDialogProps {
-  /** The miniTask that was right-clicked. The new step goes to its MainTask. Undefined closes the dialog. */
-  miniTask?: MiniTask
+  /** The MainTask that gets the new step. Undefined closes the dialog. */
   mainTask?: MainTask
   onSubmit: (mainTaskId: string, text: string) => Promise<boolean>
   onClose: () => void
 }
 
-export function AddStepDialog({ miniTask, mainTask, onSubmit, onClose }: AddStepDialogProps) {
-  const open = Boolean(miniTask && mainTask)
+export function AddStepDialog({ mainTask, onSubmit, onClose }: AddStepDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={mainTask !== undefined} onOpenChange={(next) => !next && onClose()}>
       {/* The form mounts only while open, so the text starts empty each time. */}
-      {miniTask && mainTask && <AddStepForm mainTask={mainTask} onSubmit={onSubmit} onClose={onClose} />}
+      {mainTask && <AddStepForm mainTask={mainTask} onSubmit={onSubmit} onClose={onClose} />}
     </Dialog>
   )
 }
@@ -118,6 +116,50 @@ export function DeleteMiniTaskDialog({ miniTask, mainTask, isLastStep, onConfirm
               }}
             >
               Deletar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      )}
+    </Dialog>
+  )
+}
+
+interface DeleteMainTaskDialogProps {
+  mainTask?: MainTask
+  /** All the steps of the MainTask, in the bank and in the plan. */
+  steps: MiniTask[]
+  onConfirm: (mainTaskId: string) => void
+  onClose: () => void
+}
+
+/** Deleting a whole task takes its steps with it, also the ones in the plan, so the person confirms first. */
+export function DeleteMainTaskDialog({ mainTask, steps, onConfirm, onClose }: DeleteMainTaskDialogProps) {
+  const scheduledCount = steps.filter((step) => step.scheduledDate !== undefined).length
+  return (
+    <Dialog open={mainTask !== undefined} onOpenChange={(next) => !next && onClose()}>
+      {mainTask && (
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir tarefa?</DialogTitle>
+            <DialogDescription>
+              “{mainTask.name}” e {steps.length === 1 ? 'o passo dela' : `os ${steps.length} passos dela`} serão
+              apagados e não dá para desfazer.
+              {scheduledCount === 1 && ' 1 passo está no “Em foco” e sai de lá também.'}
+              {scheduledCount > 1 && ` ${scheduledCount} passos estão no “Em foco” e saem de lá também.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                onConfirm(mainTask.id)
+                onClose()
+              }}
+            >
+              Excluir
             </Button>
           </DialogFooter>
         </DialogContent>

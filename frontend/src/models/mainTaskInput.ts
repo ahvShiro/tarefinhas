@@ -1,4 +1,4 @@
-import { EFFORTS, MAX_DEADLINE_DAYS, MIN_DEADLINE_DAYS, type Effort } from './mainTask'
+import { EFFORTS, MAX_DEADLINE_DAYS, MIN_DEADLINE_DAYS, type Effort, type MainTask } from './mainTask'
 
 export interface MainTaskInput {
   name: string
@@ -48,4 +48,18 @@ export function validateMainTaskInput(input: MainTaskInput): MainTaskInputValida
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }
   return { ok: true, cleaned: { name, description, steps, deadlineDays, effort: input.effort } }
+}
+
+/**
+ * What creates a copy of a MainTask: same description, deadline and effort, "(cópia)" in the name and the given steps.
+ * The repository gives the new color, and the deadline counts again from now, because it counts from `createdAt`.
+ */
+export function duplicateMainTaskInput(source: MainTask, steps: string[]): CleanMainTaskInput {
+  return {
+    name: `${source.name} (cópia)`,
+    description: source.description,
+    steps,
+    deadlineDays: source.deadlineDays,
+    effort: source.effort,
+  }
 }

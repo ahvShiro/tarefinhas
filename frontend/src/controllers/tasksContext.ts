@@ -25,8 +25,12 @@ export interface TasksContextValue {
   addStep(mainTaskId: string, text: string): Promise<boolean>
   /** Deletes a miniTask. Deleting the last one of a MainTask deletes the MainTask too. */
   deleteMiniTask(miniTaskId: string): Promise<void>
-  /** Sets the exact time (`HH:mm`) of a scheduled miniTask. Without a time, it goes back to "Sem hora". */
-  setMiniTaskTime(miniTaskId: string, time?: string): Promise<void>
+  /** Copies a MainTask with all its steps. The copies go to the task bank, not done. */
+  duplicateMainTask(mainTaskId: string): Promise<void>
+  /** Deletes a MainTask and all its steps, in the bank and in the plan. */
+  deleteMainTask(mainTaskId: string): Promise<void>
+  /** Puts every step of the MainTask that is in the task bank and not done in today's plan. */
+  sendMainTaskToToday(mainTaskId: string): Promise<void>
   /** Sets the exact time (`HH:mm`) of a scheduled miniTask. Without a time, it goes back to "Sem hora". */
   setMiniTaskTime(miniTaskId: string, time?: string): Promise<void>
   /** Runs a miniTask: it goes to today's plan and starts (in progress). */

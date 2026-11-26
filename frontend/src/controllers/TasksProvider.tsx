@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MainTask } from '@/models/mainTask'
-import { validateMainTaskInput, type MainTaskInput, type MainTaskInputErrors } from '@/models/mainTaskInput'
 import {
+  duplicateMainTaskInput,
+  validateMainTaskInput,
+  type MainTaskInput,
+  type MainTaskInputErrors,
+} from '@/models/mainTaskInput'
+import {
+  isInTaskBank,
   scheduleMiniTask as scheduled,
   setMiniTaskTime as withTime,
   startMiniTask,
@@ -140,6 +146,57 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     [miniTasks],
   )
 
+  const duplicateMainTask = useCallback(
+    async (mainTaskId: string) => {
+      const source = mainTasksById.get(mainTaskId)
+      if (!source) return
+      // Every step, in order. The copies go to the task bank, not done.
+      const steps = miniTasks
+        .filter((miniTask) => miniTask.mainTaskId === mainTaskId)
+        .sort((a, b) => a.position - b.position)
+        .map((miniTask) => miniTask.text)
+      const created = await repository.createMainTask(duplicateMainTaskInput(source, steps))
+      setMainTasks((list) => [...list, created.mainTask])
+      setMiniTasks((list) => [...list, ...created.miniTasks])
+    },
+    [mainTasksById, miniTasks],
+  )
+
+  const deleteMainTask = useCallback(
+    async (mainTaskId: string) => {
+      // The API has no route for a whole MainTask: its steps go one by one, and the last one takes the MainTask.
+      const stepIds = miniTasks.filter((miniTask) => miniTask.mainTaskId === mainTaskId).map((miniTask) => miniTask.id)
+      const deleted = new Set<string>()
+      try {
+        for (const id of stepIds) {
+          await repository.deleteMiniTask(id)
+          deleted.add(id)
+        }
+      } finally {
+        // If one fails, the screen keeps the steps that are still saved.
+        setMiniTasks((list) => list.filter((miniTask) => !deleted.has(miniTask.id)))
+        if (deleted.size === stepIds.length) {
+          setMainTasks((list) => list.filter((mainTask) => mainTask.id !== mainTaskId))
+        }
+      }
+    },
+    [miniTasks],
+  )
+
+  const sendMainTaskToToday = useCallback(
+    async (mainTaskId: string) => {
+      const today = todayKey()
+      const moved = miniTasks
+        .filter((miniTask) => miniTask.mainTaskId === mainTaskId && isInTaskBank(miniTask) && !miniTask.done)
+        .map((miniTask) => scheduled(miniTask, today))
+      if (moved.length === 0) return
+      const saved = await Promise.all(moved.map((miniTask) => repository.updateMiniTask(miniTask)))
+      const savedById = new Map(saved.map((miniTask) => [miniTask.id, miniTask]))
+      setMiniTasks((list) => list.map((miniTask) => savedById.get(miniTask.id) ?? miniTask))
+    },
+    [miniTasks],
+  )
+
   const setMiniTaskTime = useCallback(
     (miniTaskId: string, time?: string) => updateMiniTask(miniTaskId, (miniTask) => withTime(miniTask, time)),
     [updateMiniTask],
@@ -177,6 +234,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       copyMiniTask,
       addStep,
       deleteMiniTask,
+      duplicateMainTask,
+      deleteMainTask,
+      sendMainTaskToToday,
       setMiniTaskTime,
       runMiniTask,
       overdueMiniTasks,
@@ -196,6 +256,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       copyMiniTask,
       addStep,
       deleteMiniTask,
+      duplicateMainTask,
+      deleteMainTask,
+      sendMainTaskToToday,
       setMiniTaskTime,
       runMiniTask,
       overdueMiniTasks,
