@@ -39,18 +39,17 @@ function readErrors(data: unknown): Record<string, string> {
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; token?: string } = {},
+  options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body, token } = options
+  const { method = 'GET', body } = options
   let response: Response
   try {
     response = await fetch(`${API_URL}${path}`, {
       method,
-      headers: {
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
-      },
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
+      // The token travels in the HttpOnly cookie that the API sets at sign-in. Scripts never see it.
+      credentials: 'include',
     })
   } catch {
     // No answer at all: the backend is off, or there is no network.
@@ -69,24 +68,27 @@ async function request<T>(
   throw new ApiError(response.status, errors)
 }
 
-/** `POST /auth/sign-in`. Returns the token. */
-export async function signInRequest(input: SignInInput): Promise<string> {
-  const { token } = await request<{ token: string }>('/auth/sign-in', { method: 'POST', body: input })
-  return token
+/** `POST /auth/sign-in`. The API sets the token cookie and answers with the person. */
+export function signInRequest(input: SignInInput): Promise<ApiUser> {
+  return request<ApiUser>('/auth/sign-in', { method: 'POST', body: input })
 }
 
-/** `POST /auth/sign-up`. The person is signed in: returns the token. */
-export async function signUpRequest(input: SignUpInput): Promise<string> {
-  const { token } = await request<{ token: string }>('/auth/sign-up', { method: 'POST', body: input })
-  return token
+/** `POST /auth/sign-up`. The person is signed in at once: the API sets the token cookie. */
+export function signUpRequest(input: SignUpInput): Promise<ApiUser> {
+  return request<ApiUser>('/auth/sign-up', { method: 'POST', body: input })
 }
 
-/** `GET /users/me`. */
-export function fetchCurrentUser(token: string): Promise<ApiUser> {
-  return request<ApiUser>('/users/me', { token })
+/** `POST /auth/sign-out`. The API clears the token cookie. */
+export function signOutRequest(): Promise<void> {
+  return request<void>('/auth/sign-out', { method: 'POST' })
+}
+
+/** `GET /users/me`. Answers 401 when there is no valid token cookie. */
+export function fetchCurrentUser(): Promise<ApiUser> {
+  return request<ApiUser>('/users/me')
 }
 
 /** `PUT /users/me`. Only the name can change. */
-export function updateCurrentUser(token: string, name: string): Promise<ApiUser> {
-  return request<ApiUser>('/users/me', { method: 'PUT', body: { name }, token })
+export function updateCurrentUser(name: string): Promise<ApiUser> {
+  return request<ApiUser>('/users/me', { method: 'PUT', body: { name } })
 }

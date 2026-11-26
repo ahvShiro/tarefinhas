@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { pickRandomColor } from '@/models/colors'
-import { DEFAULT_EFFORT, type MainTask } from '@/models/mainTask'
+import { DEFAULT_EFFORT, duplicateMainTask as copyOfMainTask, type MainTask } from '@/models/mainTask'
 import { validateMainTaskInput, type MainTaskInput } from '@/models/mainTaskInput'
 import {
   createStep,
   duplicateMiniTask,
+  isInTaskBank,
   nextPosition,
   scheduleMiniTask as scheduled,
   setMiniTaskTime as withTime,
@@ -165,6 +166,43 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     [miniTasks],
   )
 
+  const duplicateMainTask = useCallback(
+    async (mainTaskId: string) => {
+      const source = mainTasksById.get(mainTaskId)
+      if (!source) return
+      const now = new Date().toISOString()
+      const copy = copyOfMainTask(source, pickRandomColor(mainTasks.map((task) => task.color)), crypto.randomUUID(), now)
+      const steps = miniTasks
+        .filter((miniTask) => miniTask.mainTaskId === mainTaskId)
+        .sort((a, b) => a.position - b.position)
+        .map((miniTask, index) => createStep(copy.id, miniTask.text, index + 1, crypto.randomUUID(), now))
+      await repositories.mainTasks.createWithMiniTasks(copy, steps)
+      setMainTasks((list) => [...list, copy])
+      setMiniTasks((list) => [...list, ...steps])
+    },
+    [mainTasks, mainTasksById, miniTasks],
+  )
+
+  const deleteMainTask = useCallback(async (mainTaskId: string) => {
+    await repositories.mainTasks.deleteWithMiniTasks(mainTaskId)
+    setMainTasks((list) => list.filter((mainTask) => mainTask.id !== mainTaskId))
+    setMiniTasks((list) => list.filter((miniTask) => miniTask.mainTaskId !== mainTaskId))
+  }, [])
+
+  const sendMainTaskToToday = useCallback(
+    async (mainTaskId: string) => {
+      const today = todayKey()
+      const moved = miniTasks
+        .filter((miniTask) => miniTask.mainTaskId === mainTaskId && isInTaskBank(miniTask) && !miniTask.done)
+        .map((miniTask) => scheduled(miniTask, today))
+      if (moved.length === 0) return
+      await Promise.all(moved.map((miniTask) => repositories.miniTasks.update(miniTask)))
+      const movedById = new Map(moved.map((miniTask) => [miniTask.id, miniTask]))
+      setMiniTasks((list) => list.map((miniTask) => movedById.get(miniTask.id) ?? miniTask))
+    },
+    [miniTasks],
+  )
+
   const setMiniTaskTime = useCallback(
     (miniTaskId: string, time?: string) => updateMiniTask(miniTaskId, (miniTask) => withTime(miniTask, time)),
     [updateMiniTask],
@@ -201,6 +239,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       copyMiniTask,
       addStep,
       deleteMiniTask,
+      duplicateMainTask,
+      deleteMainTask,
+      sendMainTaskToToday,
       setMiniTaskTime,
       runMiniTask,
       overdueMiniTasks,
@@ -219,6 +260,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       copyMiniTask,
       addStep,
       deleteMiniTask,
+      duplicateMainTask,
+      deleteMainTask,
+      sendMainTaskToToday,
       setMiniTaskTime,
       runMiniTask,
       overdueMiniTasks,

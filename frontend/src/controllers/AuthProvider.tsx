@@ -12,11 +12,12 @@ import {
   FORM_ERROR_KEY,
   fetchCurrentUser,
   signInRequest,
+  signOutRequest,
   signUpRequest,
   updateCurrentUser,
   type ApiUser,
 } from '@/models/repositories/authApi'
-import { loadPhoto, loadToken, savePhoto, saveToken } from '@/models/repositories/sessionStorage'
+import { forgetLegacyToken, loadPhoto, savePhoto } from '@/models/repositories/sessionStorage'
 import {
   AuthContext,
   type AuthContextValue,
@@ -27,27 +28,26 @@ import {
 
 const GENERIC_ERROR = 'Não foi possível concluir. Tente de novo.'
 
-// Accounts live in the backend (`/auth/sign-in`, `/auth/sign-up`, `/users/me`). The token that it gives is saved in
-// this browser, so a reload keeps the person in. The photo is not in the API yet: it is kept in this browser.
+// Accounts live in the backend (`/auth/sign-in`, `/auth/sign-up`, `/auth/sign-out`, `/users/me`). The token is in an
+// HttpOnly cookie that the API sets, so a reload keeps the person in and page scripts never see the token.
+// The photo is not in the API yet: it is kept in this browser.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null)
-  // With a saved token, the person may be in: wait for the API before deciding.
-  const [restoring, setRestoring] = useState(() => loadToken() !== null)
+  // The cookie is invisible to scripts, so at the start only the API knows whether the person is in: wait for it.
+  const [restoring, setRestoring] = useState(true)
   const [justSignedOut, setJustSignedOut] = useState(false)
   // Photos chosen in this session. An account that is not here yet reads its photo from the browser storage.
   const [chosenPhotos, setChosenPhotos] = useState<Record<string, string | undefined>>({})
 
   useEffect(() => {
-    const token = loadToken()
-    if (token === null) return
+    forgetLegacyToken()
     let cancelled = false
-    fetchCurrentUser(token)
+    fetchCurrentUser()
       .then((current) => {
         if (!cancelled) setUser(current)
       })
-      .catch((error: unknown) => {
-        // A refused token (expired or invalid) is dropped. If the API did not answer, it stays for the next try.
-        if (error instanceof ApiError && error.status !== 0) saveToken(null)
+      .catch(() => {
+        // No cookie, an expired token or no answer from the API: the person is not in.
       })
       .finally(() => {
         if (!cancelled) setRestoring(false)
@@ -64,8 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userId, chosenPhotos])
   const profile = useMemo(() => (user ? { name: user.name, email: user.email, photo } : null), [user, photo])
 
-  const enter = useCallback((token: string, current: ApiUser) => {
-    saveToken(token)
+  const enter = useCallback((current: ApiUser) => {
     setUser(current)
     setJustSignedOut(false)
   }, [])
@@ -75,8 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const validation = validateSignIn(input)
       if (!validation.ok) return validation
       try {
-        const token = await signInRequest(validation.cleaned)
-        enter(token, await fetchCurrentUser(token))
+        enter(await signInRequest(validation.cleaned))
         return { ok: true }
       } catch (error) {
         return { ok: false, errors: signInErrors(error) }
@@ -90,8 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const validation = validateSignUp(input)
       if (!validation.ok) return validation
       try {
-        const token = await signUpRequest(validation.cleaned)
-        enter(token, await fetchCurrentUser(token))
+        enter(await signUpRequest(validation.cleaned))
         return { ok: true }
       } catch (error) {
         return { ok: false, errors: signUpErrors(error) }
@@ -101,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signOut = useCallback(() => {
-    saveToken(null)
+    // The API clears the cookie. Without an answer the person still leaves this screen; the cookie expires by itself.
+    signOutRequest().catch(() => {})
     setUser(null)
     setJustSignedOut(true)
   }, [])
@@ -119,15 +117,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateName = useCallback(async (name: string): Promise<UpdateNameResult> => {
     const cleaned = name.trim()
     if (cleaned === '') return { ok: false, message: 'Informe seu nome.' }
-    const token = loadToken()
-    if (token === null) return { ok: false, message: 'Sua sessão acabou. Entre de novo.' }
     try {
-      setUser(await updateCurrentUser(token, cleaned))
+      setUser(await updateCurrentUser(cleaned))
       return { ok: true }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        // The token no longer works: the person is out.
-        saveToken(null)
+        // The token cookie no longer works: the person is out.
         setUser(null)
       }
       return { ok: false, message: firstMessage(error) }

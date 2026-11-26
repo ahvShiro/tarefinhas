@@ -9,7 +9,7 @@ export type UpdateNameResult = { ok: true } | { ok: false; message: string }
 export interface AuthContextValue {
   /** Who is in the app. Null before sign-in and after sign-out. */
   profile: Profile | null
-  /** True while the app checks, at the start, whether the saved token still works. Do not decide on `profile` yet. */
+  /** True while the app asks the API, at the start, whether the token cookie still works. Do not decide on `profile` yet. */
   restoring: boolean
   /** True after the person chose to sign out, until the next sign-in. Then no screen is remembered to open next. */
   justSignedOut: boolean
@@ -17,6 +17,7 @@ export interface AuthContextValue {
   signIn(input: SignInInput): Promise<SignInResult>
   /** Creates the account with the API (`POST /auth/sign-up`). The person is signed in at once. */
   signUp(input: SignUpInput): Promise<SignUpResult>
+  /** Leaves at once and asks the API to clear the token cookie (`POST /auth/sign-out`). */
   signOut(): void
   /** Sets the photo (image data URL), or goes back to the default cat with undefined. Returns false if it was not saved. */
   setProfilePhoto(photo: string | undefined): boolean

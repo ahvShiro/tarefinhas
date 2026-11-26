@@ -29,3 +29,11 @@ export function getDeadline(task: MainTask): Date | undefined {
   if (task.deadlineDays === undefined) return undefined
   return addDays(new Date(task.createdAt), task.deadlineDays)
 }
+
+/**
+ * A copy of a MainTask: same description, deadline and effort, a new color and "(cópia)" in the name. The deadline
+ * counts again from now, because it counts from `createdAt`.
+ */
+export function duplicateMainTask(source: MainTask, color: string, id: string, now: string): MainTask {
+  return { ...source, id, name: `${source.name} (cópia)`, color, createdAt: now }
+}

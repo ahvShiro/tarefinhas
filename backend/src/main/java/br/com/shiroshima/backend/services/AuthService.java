@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.shiroshima.backend.dtos.SignInRequest;
 import br.com.shiroshima.backend.dtos.SignUpRequest;
 import br.com.shiroshima.backend.dtos.TokenResponse;
+import br.com.shiroshima.backend.dtos.UserResponse;
 import br.com.shiroshima.backend.exceptions.BusinessException;
 import br.com.shiroshima.backend.exceptions.ConflictException;
 import br.com.shiroshima.backend.models.User;
@@ -31,7 +32,7 @@ public class AuthService {
     public TokenResponse signIn(SignInRequest request) {
         var credentials = new UsernamePasswordAuthenticationToken(normalizeEmail(request.email()), request.password());
         User user = (User) authenticationManager.authenticate(credentials).getPrincipal();
-        return new TokenResponse(tokenService.generateToken(user));
+        return new TokenResponse(tokenService.generateToken(user), UserResponse.from(user));
     }
 
     /** Creates the account and signs the person in right away. */
@@ -53,7 +54,7 @@ public class AuthService {
         user.setCreatedAt(Instant.now());
         userRepository.save(user);
 
-        return new TokenResponse(tokenService.generateToken(user));
+        return new TokenResponse(tokenService.generateToken(user), UserResponse.from(user));
     }
 
     private static String normalizeEmail(String email) {

@@ -18,6 +18,7 @@ import type { MainTask } from '@/models/mainTask'
 import { isInTaskBank, type MiniTask } from '@/models/miniTask'
 import { TASK_BANK_DROP_ID } from '@/views/dropTargets'
 import { DraggableMiniTask } from './DraggableMiniTask'
+import { MainTaskMenu } from './MainTaskMenu'
 import { useBankSimulation, type Point } from './useBankSimulation'
 import { usePrefersReducedMotion } from './usePrefersReducedMotion'
 
@@ -34,6 +35,8 @@ type MiniTaskNode = Node<MiniTaskNodeData, 'miniTask'>
 type MainTaskNodeData = {
   mainTask: MainTask
   color: string
+  /** Some step of this MainTask is in the bank and not done. */
+  hasStepsToSend: boolean
 }
 
 type MainTaskNode = Node<MainTaskNodeData, 'mainTask'>
@@ -83,10 +86,17 @@ function MainTaskNodeView({ id, data }: NodeProps<MainTaskNode>) {
         {...attributes}
         {...listeners}
         aria-label={`Tarefa: ${data.mainTask.name}`}
-        className="nodrag nopan pointer-events-auto w-60 cursor-grab touch-none rounded-xl border-2 px-4 py-3 text-center font-heading text-base font-semibold break-words shadow-md outline-none"
+        className="nodrag nopan pointer-events-auto relative w-60 cursor-grab touch-none rounded-xl border-2 px-10 py-3 text-center font-heading text-base font-semibold break-words shadow-md outline-none"
         style={{ borderColor: data.color, backgroundColor: `color-mix(in srgb, ${data.color} 30%, var(--card))` }}
       >
         {data.mainTask.name}
+        <div className="absolute top-1/2 right-1.5 -translate-y-1/2 cursor-default">
+          <MainTaskMenu
+            mainTaskId={data.mainTask.id}
+            mainTaskName={data.mainTask.name}
+            hasStepsToSend={data.hasStepsToSend}
+          />
+        </div>
       </div>
       <Handle type="source" position={Position.Right} isConnectable={false} style={centerHandle} />
     </>
@@ -198,7 +208,13 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
               type: 'mainTask',
               position,
               measured: measured[node.id],
-              data: { mainTask: node.mainTask, color: node.color },
+              data: {
+                mainTask: node.mainTask,
+                color: node.color,
+                hasStepsToSend: miniTasks.some(
+                  (miniTask) => miniTask.mainTaskId === node.mainTask.id && isInTaskBank(miniTask) && !miniTask.done,
+                ),
+              },
             },
           ]
         }
@@ -214,7 +230,7 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
           },
         ]
       }),
-    [graph, positions, held, measured, onOpen, onToggleDone],
+    [graph, positions, held, measured, miniTasks, onOpen, onToggleDone],
   )
 
   const edges = useMemo(
