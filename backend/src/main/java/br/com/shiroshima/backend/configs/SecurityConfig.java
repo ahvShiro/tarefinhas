@@ -23,7 +23,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import lombok.RequiredArgsConstructor;
 
-/** Stateless JWT security: only sign-in and sign-up are open; everything else needs a token. */
+/** Stateless JWT security: sign-in, sign-up and sign-out are open; everything else needs the token cookie. */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/auth/sign-in", "/auth/sign-up").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/sign-in", "/auth/sign-up", "/auth/sign-out").permitAll()
                         // Spring's error page, so real errors are not hidden behind a 401.
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
@@ -68,8 +68,9 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setAllowedHeaders(List.of("Content-Type"));
+        // Allowed origins may send the token cookie and read the answer.
+        configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
