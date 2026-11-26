@@ -7,6 +7,8 @@ export type CreateMainTaskResult = { ok: true } | { ok: false; errors: MainTaskI
 
 export interface TasksContextValue {
   loading: boolean
+  /** True when the tasks could not come from the API. `loading` stays true. */
+  loadFailed: boolean
   mainTasks: MainTask[]
   miniTasks: MiniTask[]
   getMainTask(id: string): MainTask | undefined

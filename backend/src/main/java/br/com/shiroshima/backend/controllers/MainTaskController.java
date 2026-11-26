@@ -1,6 +1,9 @@
 package br.com.shiroshima.backend.controllers;
 
+import java.util.UUID;
+
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -8,7 +11,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.shiroshima.backend.dtos.CreateMainTaskRequest;
+import br.com.shiroshima.backend.dtos.CreateMiniTaskRequest;
 import br.com.shiroshima.backend.dtos.MiniTaskGroupResponse;
+import br.com.shiroshima.backend.dtos.MiniTaskGroupResponse.MiniTaskSummary;
 import br.com.shiroshima.backend.services.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,5 +29,11 @@ public class MainTaskController {
     @ResponseStatus(HttpStatus.CREATED)
     public MiniTaskGroupResponse createMainTask(@Valid @RequestBody CreateMainTaskRequest request) {
         return taskService.createMainTask(request);
+    }
+
+    @PostMapping("/{id}/mini-tasks")
+    @ResponseStatus(HttpStatus.CREATED)
+    public MiniTaskSummary createMiniTask(@PathVariable UUID id, @Valid @RequestBody CreateMiniTaskRequest request) {
+        return taskService.createMiniTask(id, request);
     }
 }

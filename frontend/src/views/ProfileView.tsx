@@ -33,8 +33,8 @@ export function ProfileView() {
     }
   }
 
-  function handleSignOut() {
-    signOut()
+  async function handleSignOut() {
+    await signOut()
     void navigate(ROUTES.home, { replace: true })
   }
 
@@ -102,7 +102,7 @@ export function ProfileView() {
 
         <NameForm />
 
-        <Button variant="outline" onClick={handleSignOut}>
+        <Button variant="outline" onClick={() => void handleSignOut()}>
           Sair
         </Button>
       </main>

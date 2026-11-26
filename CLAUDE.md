@@ -21,7 +21,7 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 - Botão "Nova tarefa" abre o formulário de cadastro num modal.
 - Hora exata (ex.: 13:23): o passo continua na faixa da hora dele (13:00) e o cartão mostra a hora exata (`hasExactMinutes`, `hourSlotOf`, `setMiniTaskTime` em `models/miniTask.ts`; dentro da faixa, ordenados pela hora). Define-se por "Definir hora…" no menu do botão direito (só passos já agendados) ou pelo botão "Definir hora" no modal de detalhe, os dois abrem `components/SetTimeDialog.tsx` (campo de hora; "Tirar a hora" volta o passo para "Sem hora" do dia). Arrastar para outra faixa põe a hora cheia dela (13:23 solto em 14:00 vira 14:00); soltar na mesma faixa mantém a hora exata.
 - Menu do botão direito (ou toque longo) em qualquer cartão de miniTask, no banco e no "Em foco" (`components/MiniTaskContextMenu.tsx`, Radix `ContextMenu`; as ações vêm do `MiniTaskMenuContext`, fornecido por `OverviewView`): **Copiar para** abre um submenu com "Banco de tarefas" e só os dias que o "Em foco" está mostrando (o campo "Dias"; `upcomingDays` em `models/focus.ts`, só o nome do dia da semana, sem data, com "(hoje)" no primeiro; `OverviewView` guarda o número de dias que `FocusArea` informa em `onDayCountChange`) e cria outra miniTask igual (mesma `MainTask` e texto, no fim dos passos, não feita) no destino escolhido; num dia, mantém a hora do original. Serve para fazer o mesmo passo em dias diferentes; **Novo passo** abre um modal e cria um passo no banco, na `MainTask` do cartão; **Deletar** pede confirmação e apaga a miniTask, e se for o único passo da `MainTask`, apaga a `MainTask` também (ela precisa de pelo menos 1 passo).
-- Cor da `MainTask` sorteada entre as cores livres da paleta (`models/colors.ts`). Repete só quando a paleta esgota.
+- Cor da `MainTask` sorteada pelo backend na paleta (`ColorPalette`, igual a `models/colors.ts`). Por enquanto pode repetir.
 - Clique numa miniTask abre modal de detalhe: nome e descrição da `MainTask`, a miniTask clicada e as outras miniTasks não feitas da mesma `MainTask`.
 
 - Esforço (`Effort`: fácil, médio, difícil) é campo da `MainTask`, escolhido no formulário (padrão médio). Define a prioridade na sugestão de tarefas. `MiniTask.doneAt` guarda quando foi marcada como feita.
@@ -39,7 +39,7 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 ## Homepage (entrar e criar conta)
 
 - Primeira tela do app (`views/HomeView.tsx`), em `/`. Abas "Entrar" e "Criar conta" no mesmo painel. A aba ativa fica na URL: `?mode=sign-up` (`useSearchParams`).
-- Login pela API do backend (`/auth/sign-in`, `/auth/sign-up`, `GET`/`PUT /users/me`; ver "Backend"): `AuthProvider` valida o formulário (`models/auth.ts`, mesmas regras e mensagens do backend: a senha do cadastro precisa de 8+ caracteres, maiúscula, minúscula, número e símbolo) e chama `models/repositories/authApi.ts`. O token JWT que a API devolve fica em `localStorage` (`tarefinhas.token`) e vai no cabeçalho `Authorization: Bearer`. Ao abrir o app com token salvo, o `AuthProvider` confere com `GET /users/me` (`restoring`) antes de decidir; token recusado (401) é apagado. Erros da API vêm como `{ errors: { campo: mensagem } }`; a chave `form` (login errado) aparece sob a senha. Endereço da API: `VITE_API_URL` (padrão `http://localhost:8080`; ver `frontend/.env.example`). A API só aceita a origem `http://localhost:5173` por padrão (`CORS_ALLOWED_ORIGINS` no `.env` da raiz).
+- Login pela API do backend (`/auth/sign-in`, `/auth/sign-up`, `GET`/`PUT /users/me`; ver "Backend"): `AuthProvider` valida o formulário (`models/auth.ts`, mesmas regras e mensagens do backend: a senha do cadastro precisa de 8+ caracteres, maiúscula, minúscula, número e símbolo) e chama `models/repositories/authApi.ts`. O token JWT fica num cookie HttpOnly que o backend grava (`tarefinhas_token`, ver "Autenticação"): o JavaScript da página não lê o token, e as chamadas vão com `credentials: 'include'` (`models/repositories/apiClient.ts`). Ao abrir o app, o `AuthProvider` pergunta à API quem entrou (`GET /users/me`, `restoring`) antes de decidir. Um 401 em qualquer rota com login (cookie vencido) tira a pessoa da tela (`setUnauthorizedHandler`). "Sair" chama `POST /auth/sign-out`, porque só o backend apaga o cookie. Ao abrir, `clearLegacyStorage` apaga o token antigo do `localStorage` e o IndexedDB das versões anteriores. Erros da API vêm como `{ errors: { campo: mensagem } }`; a chave `form` (login errado) aparece sob a senha. Endereço da API: `VITE_API_URL` (padrão `http://localhost:8080`; ver `frontend/.env.example`). A API só aceita a origem `http://localhost:5173` por padrão (`CORS_ALLOWED_ORIGINS` no `.env` da raiz).
 - Sem entrar não se abre nenhuma tela do app: `components/RequireAuth.tsx` leva `/tarefas`, `/escolher` e `/perfil` para a homepage, lembra a tela pedida e, depois de entrar, abre essa tela. Quem saiu de propósito (`justSignedOut`) entra de novo na visão geral. O admin (`/admin`, só em desenvolvimento) não exige entrar.
 - Entrar: e-mail e senha. Criar conta: nome, e-mail, senha (regra forte, igual ao backend) e confirmar senha. Regras em `models/auth.ts`.
 - "Esqueci a senha" e "Continuar com Google" mostram um aviso de que ainda não estão disponíveis.
@@ -101,9 +101,8 @@ Frontend e backend seguem MVC. Cada camada só conhece a camada abaixo dela: Vie
 | Controller | `TasksProvider` (context): carrega dados, guarda estado, expõe ações. Acesso via `useTasks()`. `AuthProvider`: entrar e criar conta pela API, guarda o token e quem entrou, troca nome (API) e foto (navegador). Acesso via `useAuth()` | `src/controllers/` |
 | View | Telas e componentes React/shadcn. Só renderizam e repassam eventos ao Controller | `src/views/` (telas), `src/components/` (componentes), `src/components/ui/` (gerados pelo shadcn, não editar à mão) |
 
-- Repositórios ficam atrás das interfaces de `src/models/repositories/types.ts`. A implementação (IndexedDB hoje, API Java depois) é escolhida num único ponto: topo de `src/controllers/TasksProvider.tsx`.
+- Repositórios ficam atrás das interfaces de `src/models/repositories/types.ts`. A implementação (API do backend, `models/repositories/tasksApi.ts`) é escolhida num único ponto: topo de `src/controllers/TasksProvider.tsx`. Todo `fetch` passa por `models/repositories/apiClient.ts`. Ids, datas, cor e `position` do que se cria vêm da API.
 - Ações do Controller gravam no repositório antes de atualizar o estado.
-- Mudança de schema do IndexedDB: subir `DB_VERSION` em `src/models/repositories/indexedDb.ts` e migrar no `upgrade`.
 
 ### Backend (Spring Boot)
 
@@ -113,30 +112,37 @@ Spring MVC padrão, pacotes no plural em `br.com.shiroshima.backend`: `controlle
 - Entidades JPA com id `UUID` gerado pelo Hibernate (`GenerationType.UUID`) e `createdAt` (`Instant`) preenchido no service.
 - DTOs são `record`s e levam só os campos que a tela usa; campos novos entram quando forem precisos.
 - Validação com Bean Validation nos DTOs de entrada, com as mesmas regras e mensagens (em português) do frontend.
-- Formato de erro: `{ "errors": { "<campo>": "<mensagem>" } }`, igual aos `...Errors` do frontend. Erro sem campo (login errado, sessão expirada) usa a chave `form` (`ApiErrors.FORM`). Regra de negócio quebrada: `BusinessException(campo, mensagem)` → 400; conflito com dado salvo: `ConflictException` → 409. Tratados em `exceptions/ApiExceptionHandler`.
+- Formato de erro: `{ "errors": { "<campo>": "<mensagem>" } }`, igual aos `...Errors` do frontend. Erro sem campo (login errado, sessão expirada) usa a chave `form` (`ApiErrors.FORM`). Regra de negócio quebrada: `BusinessException(campo, mensagem)` → 400; conflito com dado salvo: `ConflictException` → 409; item que não existe, foi apagado ou é de outro usuário: `NotFoundException` → 404 na chave `form`. Tratados em `exceptions/ApiExceptionHandler`.
 - Cor da `MainTask` sorteada no backend (`models/ColorPalette`, cópia da paleta de `frontend/src/models/colors.ts`; manter as 2 iguais). Por enquanto sorteio simples, pode repetir cor.
+- Apagar é soft delete: `deletedAt` em `MainTask` e `MiniTask`, e `@SQLRestriction("deleted_at is null")` nas entidades esconde as apagadas de toda consulta. A rota continua respondendo 204.
+- `Effort` (`models/Effort`) vai no JSON como no frontend: `"easy"`, `"medium"`, `"hard"`. A coluna tem padrão `MEDIUM` para as linhas antigas.
 
 #### Endpoints
 
 | Método e rota | Acesso | O que faz |
 |---|---|---|
-| `POST /auth/sign-up` | aberto | Cria conta (`name`, `email`, `password`, `passwordConfirmation`) → 201 `{ token }`. A pessoa já entra logada |
-| `POST /auth/sign-in` | aberto | `email`, `password` → 200 `{ token }`. Errado → 401 `form: "E-mail ou senha incorretos."` |
+| `POST /auth/sign-up` | aberto | Cria conta (`name`, `email`, `password`, `passwordConfirmation`) → 201 `{ id, name, email }` + cookie do token. A pessoa já entra logada |
+| `POST /auth/sign-in` | aberto | `email`, `password` → 200 `{ id, name, email }` + cookie do token. Errado → 401 `form: "E-mail ou senha incorretos."` |
+| `POST /auth/sign-out` | aberto | Apaga o cookie do token → 204 |
 | `GET /users/me` | token | Dados do usuário logado (`id`, `name`, `email`) |
 | `PUT /users/me` | token | Edita o usuário logado. Só o `name` |
-| `GET /mini-tasks` | token | MiniTasks do usuário, agrupadas por `MainTask`: `[{ mainTask: { id, name, description, color }, miniTasks: [{ id, text, position, done, scheduledDate, scheduledTime }] }]`. Uma consulta só (`join fetch`). Tarefa mais antiga primeiro, passos em ordem |
-| `POST /main-tasks` | token | Cria `MainTask` com os passos: `{ name, description, deadlineDays?, miniTasks: [{ text }] }` → 201 com o grupo criado (mesmo formato de um item do `GET /mini-tasks`). `position` vem da ordem da lista |
+| `GET /mini-tasks` | token | MiniTasks do usuário, agrupadas por `MainTask`: `[{ mainTask: { id, name, description, deadlineDays, effort, color, createdAt }, miniTasks: [{ id, text, position, done, doneAt, inProgress, scheduledDate, scheduledTime, createdAt }] }]`. Uma consulta só (`join fetch`). Tarefa mais antiga primeiro, passos em ordem |
+| `POST /main-tasks` | token | Cria `MainTask` com os passos: `{ name, description, deadlineDays?, effort?, miniTasks: [{ text }] }` → 201 com o grupo criado (mesmo formato de um item do `GET /mini-tasks`). `position` vem da ordem da lista; `effort` padrão `medium` |
+| `POST /main-tasks/{id}/mini-tasks` | token | Novo passo no fim (`Novo passo`, `Copiar para`): `{ text, scheduledDate?, scheduledTime? }` → 201 com o passo |
+| `PATCH /mini-tasks/{id}` | token | `{ done?, inProgress?, scheduledDate, scheduledTime }` → 200 com o passo. `done`/`inProgress` ausentes ficam como estão; `scheduledDate` e `scheduledTime` valem sempre (nulo = banco / sem hora), então vão em toda chamada. O backend preenche `doneAt` |
+| `DELETE /mini-tasks/{id}` | token | Soft delete → 204. Se for o último passo, apaga a `MainTask` junto |
 
 Os passos do formulário (`step` no frontend) são as `MiniTask`s; na API chamam `miniTasks`.
 
 #### Autenticação
 
-Reaproveitada do projeto budgie (`~/IFPR/6-PW/budgie/budgie-backend`): Spring Security sem sessão, JWT (`com.auth0:java-jwt`, HMAC256, assunto = e-mail, 24 h), senha com BCrypt, `SecurityFilter` lê `Authorization: Bearer <token>`, `ApiAuthEntryPoint` (401) e `ApiAccessDeniedHandler` (403), CORS por propriedade. Diferenças do budgie: sem papéis (`AuthRole` removido), id `UUID`, e-mail guardado sem espaços e em minúsculas, só aceita cabeçalho com prefixo `Bearer `, senha errada responde "E-mail ou senha incorretos." (não "sessão expirada"). Regra de senha do budgie: 8+ caracteres, com maiúscula, minúscula, número e caractere especial. Cada `MainTask` pertence a um `User` (`user_id`); as rotas de tarefas só veem as do usuário logado.
+Reaproveitada do projeto budgie (`~/IFPR/6-PW/budgie/budgie-backend`): Spring Security sem sessão, JWT (`com.auth0:java-jwt`, HMAC256, assunto = e-mail, 24 h), senha com BCrypt, `SecurityFilter` lê o token do cookie HttpOnly `tarefinhas_token` (`configs/AuthCookies`: `SameSite=Strict`, `Path=/`, `Secure` por `COOKIE_SECURE`, validade igual à do JWT), `ApiAuthEntryPoint` (401) e `ApiAccessDeniedHandler` (403), CORS por propriedade. Diferenças do budgie: sem papéis (`AuthRole` removido), id `UUID`, e-mail guardado sem espaços e em minúsculas, token em cookie HttpOnly, não no cabeçalho `Authorization` (o JavaScript não lê o token, então um script injetado não rouba a sessão), CORS com `allowCredentials`, senha errada responde "E-mail ou senha incorretos." (não "sessão expirada"). Regra de senha do budgie: 8+ caracteres, com maiúscula, minúscula, número e caractere especial. Cada `MainTask` pertence a um `User` (`user_id`); as rotas de tarefas só veem as do usuário logado.
 
 #### Configuração (`.env`, lido pelo `docker-compose.yml`)
 
 - `DATASOURCE_URL` (formato `jdbc:postgresql://...`), `DATASOURCE_USERNAME`, `DATASOURCE_PASSWORD`. Hoje aponta para o Postgres do Neon. Com o Postgres local do compose (perfil `local-db`), o host é `postgres`, não `localhost`.
 - `TOKEN_SECRET`: segredo do JWT. Obrigatório.
+- `COOKIE_SECURE`: marca `Secure` no cookie do token. Padrão `true`; Chrome e Firefox aceitam em `http://localhost`.
 - `CORS_ALLOWED_ORIGINS`: origens liberadas, separadas por vírgula. Padrão `http://localhost:5173`.
 - Tabelas criadas e atualizadas pelo Hibernate (`spring.jpa.hibernate.ddl-auto=update`), sem Flyway.
 - Rodar: `docker compose up --build` na raiz (perfil `prod`).
@@ -146,7 +152,6 @@ Reaproveitada do projeto budgie (`~/IFPR/6-PW/budgie/budgie-backend`): Spring Se
 ### Frontend
 - Vite + React 19 + TypeScript, PWA via `vite-plugin-pwa`
 - Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) (preset Nova, base Radix). Adicionar componente: `npx shadcn@latest add <nome>`
-- IndexedDB via `idb`
 - React Router (`react-router`): rotas em `src/views/routes.ts` (`/`, `/tarefas`, `/escolher`, `/perfil`, `/admin` só em desenvolvimento; endereço desconhecido volta para `/`). Montadas em `App.tsx`
 - `@xyflow/react` (React Flow): desenha o grafo do banco. `d3-force`: física do banco. `@dnd-kit/core`: arrastar. `date-fns`: datas
 - Gerenciador de pacotes: npm
@@ -155,7 +160,6 @@ Reaproveitada do projeto budgie (`~/IFPR/6-PW/budgie/budgie-backend`): Spring Se
 - Java 21 + Spring Boot 4.1 (Web MVC, Data JPA, Validation, Security), Lombok, `com.auth0:java-jwt`
 - PostgreSQL (Neon hospedado; Postgres local opcional no compose)
 - Docker: `backend/Dockerfile` + `docker-compose.yml` na raiz
-- O frontend ainda salva tudo no navegador (IndexedDB). Ligar o frontend à API é a próxima etapa.
 
 ## Estrutura do repositório
 
@@ -216,10 +220,13 @@ Registrar aqui decisões tomadas ao longo do desenvolvimento (data + decisão + 
 - 2026-11-23 — Telas do app só abrem com login (`RequireAuth`). Motivo: pedido do usuário.
 - 2026-11-23 — A autenticação feita no navegador (contas e senha com hash no `localStorage`, conta fictícia, trocar senha) foi removida: o frontend usa o login do backend do Shiro (`/auth/sign-in`, `/auth/sign-up`, `/users/me`). Motivo: o backend com banco (Neon) e JWT já existe. A troca de senha saiu porque a API não tem rota para ela; a foto continua no navegador porque a API não tem foto. Testes sempre contra o backend real (`docker compose up --build`), nunca com um servidor de mentira.
 
+- 2026-11-26 — Token JWT em cookie HttpOnly (`SameSite=Strict`) em vez de `localStorage` e `Authorization: Bearer`. Motivo: pedido do usuário, para um script injetado (XSS) não conseguir roubar o token. Nova rota `POST /auth/sign-out`, porque só o backend apaga o cookie.
+- 2026-11-26 — As tarefas saem do IndexedDB e vão para a API (`tasksApi.ts`). Novas rotas: `POST /main-tasks/{id}/mini-tasks`, `PATCH /mini-tasks/{id}` e `DELETE /mini-tasks/{id}`; a regra "apagar o último passo apaga a tarefa" fica no backend. Motivo: pedido do usuário; cada conta vê só as próprias tarefas. As tarefas de teste do IndexedDB são descartadas, sem importar.
+- 2026-11-26 — Apagar é soft delete (`deletedAt`), ainda respondendo 204. Motivo: precaução, pedido do usuário.
+
 ## Pendências a definir
 
-- Ligar as tarefas à API (trocar o IndexedDB pelos endpoints; o login já usa a API)
-- Passo em branco: o frontend descarta, o backend responde 400 em `miniTasks[i].text`; o formulário espera o erro em `steps`
+- Cor sem repetir no backend (hoje o sorteio pode repetir; o frontend antigo evitava)
 - Recuperar senha e trocar senha
 - Migrações de schema (hoje `ddl-auto=update`)
 - Estratégia de testes

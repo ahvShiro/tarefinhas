@@ -1,25 +1,21 @@
-const TOKEN_KEY = 'tarefinhas.token'
+const LEGACY_TOKEN_KEY = 'tarefinhas.token'
+const LEGACY_DATABASE = 'tarefinhas'
 const PHOTO_KEY_PREFIX = 'tarefinhas.photo.'
 
-// The token is the key to the account, so it lives only in this browser's storage and goes out only in the
-// `Authorization` header to the API.
-
-/** The saved token of the person who is in, or null. */
-export function loadToken(): string | null {
+/**
+ * Removes what older versions kept in this browser: the token (now in an HttpOnly cookie) and the IndexedDB tasks
+ * (now in the API). Leaving them would let anyone with this browser read them.
+ */
+export function clearLegacyStorage(): void {
   try {
-    return window.localStorage.getItem(TOKEN_KEY)
+    window.localStorage.removeItem(LEGACY_TOKEN_KEY)
   } catch {
-    return null
+    // Blocked storage: there is nothing saved either.
   }
-}
-
-/** Saves the token, or clears it with null. */
-export function saveToken(token: string | null): void {
   try {
-    if (token === null) window.localStorage.removeItem(TOKEN_KEY)
-    else window.localStorage.setItem(TOKEN_KEY, token)
+    window.indexedDB?.deleteDatabase(LEGACY_DATABASE)
   } catch {
-    // Blocked storage: the person stays in until the page reloads.
+    // Same as above.
   }
 }
 

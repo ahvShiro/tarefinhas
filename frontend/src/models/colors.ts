@@ -1,3 +1,4 @@
+// MainTask colors. The backend picks the color of a new MainTask (`ColorPalette`): keep both lists the same.
 export const PALETTE = [
   '#ef4444',
   '#f97316',
@@ -16,14 +17,3 @@ export const PALETTE = [
   '#d946ef',
   '#ec4899',
 ] as const
-
-function pickRandom<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)]
-}
-
-/** Random color among the ones no MainTask uses yet. Repeats only when the palette runs out. */
-export function pickRandomColor(usedColors: readonly string[]): string {
-  const used = new Set(usedColors)
-  const free = PALETTE.filter((color) => !used.has(color))
-  return pickRandom(free.length > 0 ? free : PALETTE)
-}

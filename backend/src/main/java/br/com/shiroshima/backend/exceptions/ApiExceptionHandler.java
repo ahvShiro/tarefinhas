@@ -29,6 +29,12 @@ public class ApiExceptionHandler {
         return ApiErrors.of(exception.getField(), exception.getMessage());
     }
 
+    @ExceptionHandler(NotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Map<String, String>> handleNotFound(NotFoundException exception) {
+        return ApiErrors.of(ApiErrors.FORM, exception.getMessage());
+    }
+
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, Map<String, String>> handleBusiness(BusinessException exception) {

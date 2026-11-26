@@ -42,6 +42,7 @@ const CLICK_AFTER_DRAG_GUARD_MS = 150
 export function OverviewView() {
   const {
     loading,
+    loadFailed,
     mainTasks,
     miniTasks,
     getMainTask,
@@ -174,7 +175,11 @@ export function OverviewView() {
         </header>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
+          <p className="text-sm text-muted-foreground">
+            {loadFailed
+              ? 'Não foi possível carregar as tarefas. Recarregue a página para tentar de novo.'
+              : 'Carregando…'}
+          </p>
         ) : (
           <DndContext
             sensors={sensors}

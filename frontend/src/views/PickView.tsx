@@ -22,7 +22,7 @@ import { ROUTES } from './routes'
  * in this round.
  */
 export function PickView() {
-  const { loading, createMainTask } = useTasks()
+  const { loading, loadFailed, createMainTask } = useTasks()
   const [round, setRound] = useState(0)
   const [formOpen, setFormOpen] = useState(false)
 
@@ -47,7 +47,11 @@ export function PickView() {
       </header>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">
+          {loadFailed
+            ? 'Não foi possível carregar as tarefas. Recarregue a página para tentar de novo.'
+            : 'Carregando…'}
+        </p>
       ) : (
         // A new key builds a new queue: the deck reads the bank once, when it mounts.
         <Deck key={round} onRestart={() => setRound((current) => current + 1)} />

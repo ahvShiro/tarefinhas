@@ -5,6 +5,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
 
+import org.hibernate.annotations.SQLRestriction;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -20,6 +22,8 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "mini_tasks")
+// Soft delete: rows with deleted_at stay in the database but no query sees them.
+@SQLRestriction("deleted_at is null")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -49,11 +53,17 @@ public class MiniTask {
     /** Local date. Null while the miniTask is in the task bank. */
     private LocalDate scheduledDate;
 
-    /** Whole hour (HH:00). Only set when scheduledDate is set. */
+    /** HH:00 for the hour slot, or an exact time like 13:23. Only set when scheduledDate is set. */
     private LocalTime scheduledTime;
 
     @Column(nullable = false)
     private Instant createdAt;
+
+    /** When it was checked as done. Null while it is not done. */
+    private Instant doneAt;
+
+    /** When it was deleted. Null while it exists. */
+    private Instant deletedAt;
 
     public boolean isInTaskBank() {
         return scheduledDate == null;

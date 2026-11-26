@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { pickRandomColor } from '@/models/colors'
-import { DEFAULT_EFFORT, type MainTask } from '@/models/mainTask'
-import { validateMainTaskInput, type MainTaskInput } from '@/models/mainTaskInput'
+import type { MainTask } from '@/models/mainTask'
+import { validateMainTaskInput, type MainTaskInput, type MainTaskInputErrors } from '@/models/mainTaskInput'
 import {
-  createStep,
-  duplicateMiniTask,
-  nextPosition,
   scheduleMiniTask as scheduled,
   setMiniTaskTime as withTime,
   startMiniTask,
@@ -14,34 +10,40 @@ import {
   type MiniTask,
 } from '@/models/miniTask'
 import { moveToToday, splitOverdue, todayKey } from '@/models/overdue'
-import { createIndexedDbRepositories } from '@/models/repositories/indexedDb'
+import { ApiError, FORM_ERROR_KEY } from '@/models/repositories/apiClient'
+import { createApiTaskRepository } from '@/models/repositories/tasksApi'
 import { TasksContext, type CreateMainTaskResult, type TasksContextValue } from './tasksContext'
 
+const GENERIC_ERROR = 'Não foi possível salvar. Tente de novo.'
+
 // Single place where the persistence implementation is chosen.
-const repositories = createIndexedDbRepositories()
+const repository = createApiTaskRepository()
 
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [mainTasks, setMainTasks] = useState<MainTask[]>([])
   const [miniTasks, setMiniTasks] = useState<MiniTask[]>([])
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([repositories.mainTasks.listAll(), repositories.miniTasks.listAll()]).then(
-      async ([loadedMainTasks, loadedMiniTasks]) => {
-        // Tasks saved before the effort field existed get the default effort.
-        const normalized = loadedMainTasks.map((task) => ({ ...task, effort: task.effort ?? DEFAULT_EFFORT }))
+    repository
+      .listAll()
+      .then(async ({ mainTasks: loadedMainTasks, miniTasks: loadedMiniTasks }) => {
         // Rule for tasks not done: without a deadline, they move to today by themselves.
-        const byId = new Map(normalized.map((task) => [task.id, task]))
+        const byId = new Map(loadedMainTasks.map((task) => [task.id, task]))
         const { rolled } = splitOverdue(loadedMiniTasks, (id) => byId.get(id), todayKey())
-        await Promise.all(rolled.map((miniTask) => repositories.miniTasks.update(miniTask)))
+        const saved = await Promise.all(rolled.map((miniTask) => repository.updateMiniTask(miniTask)))
         if (cancelled) return
-        const rolledById = new Map(rolled.map((miniTask) => [miniTask.id, miniTask]))
-        setMainTasks(normalized)
-        setMiniTasks(loadedMiniTasks.map((miniTask) => rolledById.get(miniTask.id) ?? miniTask))
+        const savedById = new Map(saved.map((miniTask) => [miniTask.id, miniTask]))
+        setMainTasks(loadedMainTasks)
+        setMiniTasks(loadedMiniTasks.map((miniTask) => savedById.get(miniTask.id) ?? miniTask))
         setLoading(false)
-      },
-    )
+      })
+      .catch(() => {
+        // 401 already sent the person to the homepage (AuthProvider). Otherwise the screen says it failed.
+        if (!cancelled) setLoadFailed(true)
+      })
     return () => {
       cancelled = true
     }
@@ -56,41 +58,23 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       const validation = validateMainTaskInput(input)
       if (!validation.ok) return validation
 
-      const { cleaned } = validation
-      const now = new Date().toISOString()
-      const mainTask: MainTask = {
-        id: crypto.randomUUID(),
-        name: cleaned.name,
-        description: cleaned.description,
-        deadlineDays: cleaned.deadlineDays,
-        effort: cleaned.effort,
-        color: pickRandomColor(mainTasks.map((task) => task.color)),
-        createdAt: now,
+      try {
+        const created = await repository.createMainTask(validation.cleaned)
+        setMainTasks((current) => [...current, created.mainTask])
+        setMiniTasks((current) => [...current, ...created.miniTasks])
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, errors: mainTaskErrors(error) }
       }
-      const newMiniTasks: MiniTask[] = cleaned.steps.map((text, index) => ({
-        id: crypto.randomUUID(),
-        mainTaskId: mainTask.id,
-        text,
-        position: index + 1,
-        done: false,
-        inProgress: false,
-        createdAt: now,
-      }))
-
-      await repositories.mainTasks.createWithMiniTasks(mainTask, newMiniTasks)
-      setMainTasks((current) => [...current, mainTask])
-      setMiniTasks((current) => [...current, ...newMiniTasks])
-      return { ok: true }
     },
-    [mainTasks],
+    [],
   )
 
   const updateMiniTask = useCallback(
     async (miniTaskId: string, change: (miniTask: MiniTask) => MiniTask) => {
       const current = miniTasks.find((miniTask) => miniTask.id === miniTaskId)
       if (!current) return
-      const updated = change(current)
-      await repositories.miniTasks.update(updated)
+      const updated = await repository.updateMiniTask(change(current))
       setMiniTasks((list) => list.map((miniTask) => (miniTask.id === miniTaskId ? updated : miniTask)))
     },
     [miniTasks],
@@ -116,14 +100,13 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     async (miniTaskId: string, date?: string) => {
       const source = miniTasks.find((miniTask) => miniTask.id === miniTaskId)
       if (!source) return
-      const duplicate = duplicateMiniTask(
-        source,
-        nextPosition(miniTasks, source.mainTaskId),
-        crypto.randomUUID(),
-        new Date().toISOString(),
-      )
-      const copy = date === undefined ? duplicate : scheduled(duplicate, date, source.scheduledTime)
-      await repositories.miniTasks.create(copy)
+      // Same MainTask and text, at the end of the steps, not done. On a day, it keeps the hour of the original.
+      const copy = await repository.createMiniTask({
+        mainTaskId: source.mainTaskId,
+        text: source.text,
+        scheduledDate: date,
+        scheduledTime: date === undefined ? undefined : source.scheduledTime,
+      })
       setMiniTasks((list) => [...list, copy])
     },
     [miniTasks],
@@ -133,18 +116,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     async (mainTaskId: string, text: string) => {
       const cleaned = text.trim()
       if (cleaned === '' || !mainTasksById.has(mainTaskId)) return false
-      const step = createStep(
-        mainTaskId,
-        cleaned,
-        nextPosition(miniTasks, mainTaskId),
-        crypto.randomUUID(),
-        new Date().toISOString(),
-      )
-      await repositories.miniTasks.create(step)
+      const step = await repository.createMiniTask({ mainTaskId, text: cleaned })
       setMiniTasks((list) => [...list, step])
       return true
     },
-    [miniTasks, mainTasksById],
+    [mainTasksById],
   )
 
   const deleteMiniTask = useCallback(
@@ -152,13 +128,12 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       const target = miniTasks.find((miniTask) => miniTask.id === miniTaskId)
       if (!target) return
       const isLastStep = miniTasks.filter((miniTask) => miniTask.mainTaskId === target.mainTaskId).length === 1
+      // A MainTask needs at least 1 step: the API deletes it with its last step, and so does the screen.
+      await repository.deleteMiniTask(miniTaskId)
       if (isLastStep) {
-        // A MainTask needs at least 1 step: without any, it goes too.
-        await repositories.mainTasks.deleteWithMiniTasks(target.mainTaskId)
         setMainTasks((list) => list.filter((mainTask) => mainTask.id !== target.mainTaskId))
         setMiniTasks((list) => list.filter((miniTask) => miniTask.mainTaskId !== target.mainTaskId))
       } else {
-        await repositories.miniTasks.delete(miniTaskId)
         setMiniTasks((list) => list.filter((miniTask) => miniTask.id !== miniTaskId))
       }
     },
@@ -191,6 +166,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const value = useMemo<TasksContextValue>(
     () => ({
       loading,
+      loadFailed,
       mainTasks,
       miniTasks,
       getMainTask,
@@ -209,6 +185,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }),
     [
       loading,
+      loadFailed,
       mainTasks,
       miniTasks,
       getMainTask,
@@ -228,4 +205,18 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   )
 
   return <TasksContext.Provider value={value}>{children}</TasksContext.Provider>
+}
+
+/** Errors of the task form. The API names a step `miniTasks[0].text`; the form shows step errors under `steps`. */
+function mainTaskErrors(error: unknown): MainTaskInputErrors {
+  if (!(error instanceof ApiError)) return { name: GENERIC_ERROR }
+  const errors: MainTaskInputErrors = {}
+  for (const [field, message] of Object.entries(error.errors)) {
+    if (field === 'miniTasks' || field.startsWith('miniTasks[')) errors.steps ??= message
+    else if (field === 'name' || field === 'description' || field === 'deadlineDays' || field === 'effort') {
+      errors[field] = message
+    }
+  }
+  // Errors with no field (server off, session over) go under the name, the first field of the form.
+  return Object.keys(errors).length > 0 ? errors : { name: error.errors[FORM_ERROR_KEY] ?? GENERIC_ERROR }
 }

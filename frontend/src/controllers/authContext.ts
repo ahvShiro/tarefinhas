@@ -17,7 +17,8 @@ export interface AuthContextValue {
   signIn(input: SignInInput): Promise<SignInResult>
   /** Creates the account with the API (`POST /auth/sign-up`). The person is signed in at once. */
   signUp(input: SignUpInput): Promise<SignUpResult>
-  signOut(): void
+  /** Asks the API to remove the token cookie (`POST /auth/sign-out`), then signs out of the screen. */
+  signOut(): Promise<void>
   /** Sets the photo (image data URL), or goes back to the default cat with undefined. Returns false if it was not saved. */
   setProfilePhoto(photo: string | undefined): boolean
   /** Changes the name with the API (`PUT /users/me`). */

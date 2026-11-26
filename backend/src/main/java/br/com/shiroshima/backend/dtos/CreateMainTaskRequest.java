@@ -2,6 +2,7 @@ package br.com.shiroshima.backend.dtos;
 
 import java.util.List;
 
+import br.com.shiroshima.backend.models.Effort;
 import br.com.shiroshima.backend.models.MainTask;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -21,6 +22,8 @@ public record CreateMainTaskRequest(
         @Min(value = MainTask.MIN_DEADLINE_DAYS, message = "O prazo deve ser vazio ou um número inteiro de 1 a 7.")
         @Max(value = MainTask.MAX_DEADLINE_DAYS, message = "O prazo deve ser vazio ou um número inteiro de 1 a 7.")
         Integer deadlineDays,
+        /** Optional: medium when missing. */
+        Effort effort,
 
         @NotEmpty(message = "Adicione pelo menos 1 passo.")
         List<@NotNull @Valid MiniTaskInput> miniTasks) {

@@ -36,25 +36,6 @@ export function startMiniTask(miniTask: MiniTask, date: string): MiniTask {
   return { ...scheduleMiniTask(miniTask, date), inProgress: true }
 }
 
-/** Position for a new step at the end of its MainTask. */
-export function nextPosition(miniTasks: MiniTask[], mainTaskId: string): number {
-  const positions = miniTasks.filter((miniTask) => miniTask.mainTaskId === mainTaskId).map((miniTask) => miniTask.position)
-  return positions.length === 0 ? 1 : Math.max(...positions) + 1
-}
-
-/** A new step of a MainTask. It starts in the task bank. */
-export function createStep(mainTaskId: string, text: string, position: number, id: string, now: string): MiniTask {
-  return { id, mainTaskId, text, position, done: false, inProgress: false, createdAt: now }
-}
-
-/**
- * A copy of a miniTask: same MainTask and same text, new id, at the end of the steps, in the task bank, not done.
- * It lets the person do the same step on another day.
- */
-export function duplicateMiniTask(source: MiniTask, position: number, id: string, now: string): MiniTask {
-  return createStep(source.mainTaskId, source.text, position, id, now)
-}
-
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/
 
 /** Returns the time if it is `HH:mm` (00:00 to 23:59), and null if it is not. */
