@@ -1,4 +1,4 @@
-import { MAX_DEADLINE_DAYS, MIN_DEADLINE_DAYS } from './mainTask'
+import { EFFORTS, MAX_DEADLINE_DAYS, MIN_DEADLINE_DAYS, type Effort } from './mainTask'
 
 export interface MainTaskInput {
   name: string
@@ -6,6 +6,7 @@ export interface MainTaskInput {
   steps: string[]
   /** Raw text from the form. Empty means no deadline. */
   deadlineDays: string
+  effort: Effort
 }
 
 export interface CleanMainTaskInput {
@@ -13,6 +14,7 @@ export interface CleanMainTaskInput {
   description: string
   steps: string[]
   deadlineDays?: number
+  effort: Effort
 }
 
 export type MainTaskInputErrors = Partial<Record<keyof MainTaskInput, string>>
@@ -32,6 +34,8 @@ export function validateMainTaskInput(input: MainTaskInput): MainTaskInputValida
   if (description === '') errors.description = 'Informe a descrição.'
   if (steps.length === 0) errors.steps = 'Adicione pelo menos 1 passo.'
 
+  if (!EFFORTS.includes(input.effort)) errors.effort = 'Escolha o esforço.'
+
   let deadlineDays: number | undefined
   if (rawDeadline !== '') {
     const parsed = Number(rawDeadline)
@@ -43,5 +47,5 @@ export function validateMainTaskInput(input: MainTaskInput): MainTaskInputValida
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }
-  return { ok: true, cleaned: { name, description, steps, deadlineDays } }
+  return { ok: true, cleaned: { name, description, steps, deadlineDays, effort: input.effort } }
 }

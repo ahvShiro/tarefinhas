@@ -1,7 +1,7 @@
 import type { MouseEvent, PointerEvent } from 'react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
-import type { MiniTask } from '@/models/miniTask'
+import { hasExactMinutes, type MiniTask } from '@/models/miniTask'
 
 interface MiniTaskCardProps {
   miniTask: MiniTask
@@ -33,7 +33,12 @@ export function MiniTaskCard({ miniTask, color, onToggleDone, compact, className
         onPointerDown={stop}
         aria-label={miniTask.done ? 'Marcar como não feita' : 'Marcar como feita'}
       />
-      <span className={cn('min-w-0 flex-1 break-words', miniTask.done && 'line-through')}>{miniTask.text}</span>
+      <span className={cn('min-w-0 flex-1 break-words', miniTask.done && 'line-through')}>
+        {hasExactMinutes(miniTask.scheduledTime) && (
+          <span className="mr-1.5 font-semibold tabular-nums">{miniTask.scheduledTime}</span>
+        )}
+        {miniTask.text}
+      </span>
     </div>
   )
 }

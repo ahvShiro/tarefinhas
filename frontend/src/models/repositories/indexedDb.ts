@@ -47,14 +47,30 @@ export function createIndexedDbRepositories(): {
         tx.done,
       ])
     },
+    async deleteWithMiniTasks(mainTaskId) {
+      const db = await dbPromise
+      const tx = db.transaction(['mainTasks', 'miniTasks'], 'readwrite')
+      const miniTaskKeys = await tx.objectStore('miniTasks').index('byMainTaskId').getAllKeys(mainTaskId)
+      await Promise.all([
+        tx.objectStore('mainTasks').delete(mainTaskId),
+        ...miniTaskKeys.map((key) => tx.objectStore('miniTasks').delete(key)),
+        tx.done,
+      ])
+    },
   }
 
   const miniTasks: MiniTaskRepository = {
     async listAll() {
       return (await dbPromise).getAll('miniTasks')
     },
+    async create(miniTask) {
+      await (await dbPromise).add('miniTasks', miniTask)
+    },
     async update(miniTask) {
       await (await dbPromise).put('miniTasks', miniTask)
+    },
+    async delete(miniTaskId) {
+      await (await dbPromise).delete('miniTasks', miniTaskId)
     },
   }
 

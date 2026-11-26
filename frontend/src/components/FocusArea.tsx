@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DEFAULT_FOCUS_DAYS, MAX_FOCUS_DAYS, MIN_FOCUS_DAYS, parseFocusDays } from '@/models/focus'
 import type { MainTask } from '@/models/mainTask'
-import type { MiniTask } from '@/models/miniTask'
+import { hourSlotOf, type MiniTask } from '@/models/miniTask'
 import { dayDropId, slotDropId } from '@/views/dropTargets'
 import { DraggableMiniTask } from './DraggableMiniTask'
 import { FocusSlot } from './FocusSlot'
@@ -18,18 +18,29 @@ interface FocusAreaProps {
   getMainTask: (id: string) => MainTask | undefined
   onOpen: (miniTaskId: string) => void
   onToggleDone: (miniTaskId: string) => void
+  /** Number of days at the start. The panel can be closed and opened, so it must start with the last choice. */
+  initialDayCount?: number
+  /** Called when the person sets a new number of days in the field. */
+  onDayCountChange?: (dayCount: number) => void
 }
 
 function hourLabel(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`
 }
 
-export function FocusArea({ miniTasks, getMainTask, onOpen, onToggleDone }: FocusAreaProps) {
+export function FocusArea({
+  miniTasks,
+  getMainTask,
+  onOpen,
+  onToggleDone,
+  initialDayCount = DEFAULT_FOCUS_DAYS,
+  onDayCountChange,
+}: FocusAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const hourRowRef = useRef<HTMLDivElement>(null)
-  const [dayCount, setDayCount] = useState(DEFAULT_FOCUS_DAYS)
+  const [dayCount, setDayCount] = useState(initialDayCount)
   // What the field shows while typing; dayCount changes only on a valid value.
-  const [dayCountDraft, setDayCountDraft] = useState(String(DEFAULT_FOCUS_DAYS))
+  const [dayCountDraft, setDayCountDraft] = useState(String(initialDayCount))
 
   const days = useMemo(() => {
     const today = startOfToday()
@@ -39,15 +50,20 @@ export function FocusArea({ miniTasks, getMainTask, onOpen, onToggleDone }: Focu
     })
   }, [dayCount])
 
-  // Key: `${date}` for slots without time, `${date} ${HH:00}` for hour slots.
+  // Key: `${date}` for slots without time, `${date} ${HH:00}` for hour slots (an exact time sits in its hour).
   const bySlot = useMemo(() => {
     const map = new Map<string, MiniTask[]>()
     for (const miniTask of miniTasks) {
       if (!miniTask.scheduledDate) continue
+      // An exact time (13:23) sits in the slot of its hour (13:00).
       const key = miniTask.scheduledTime
-        ? `${miniTask.scheduledDate} ${miniTask.scheduledTime}`
+        ? `${miniTask.scheduledDate} ${hourSlotOf(miniTask.scheduledTime)}`
         : miniTask.scheduledDate
       map.set(key, [...(map.get(key) ?? []), miniTask])
+    }
+    // Inside a slot, by exact time.
+    for (const list of map.values()) {
+      list.sort((a, b) => (a.scheduledTime ?? '').localeCompare(b.scheduledTime ?? '') || a.position - b.position)
     }
     return map
   }, [miniTasks])
@@ -75,7 +91,7 @@ export function FocusArea({ miniTasks, getMainTask, onOpen, onToggleDone }: Focu
     })
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
       <header className="flex items-center justify-between gap-3 border-b px-4 py-2">
         <h2 className="font-heading font-medium">Em foco</h2>
         <div className="flex items-center gap-2">
@@ -93,7 +109,10 @@ export function FocusArea({ miniTasks, getMainTask, onOpen, onToggleDone }: Focu
             onChange={(event) => {
               setDayCountDraft(event.target.value)
               const parsed = parseFocusDays(event.target.value)
-              if (parsed !== null) setDayCount(parsed)
+              if (parsed !== null) {
+                setDayCount(parsed)
+                onDayCountChange?.(parsed)
+              }
             }}
             onBlur={() => setDayCountDraft(String(dayCount))}
             className="h-7 w-14 px-2 text-sm"

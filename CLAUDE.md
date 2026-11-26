@@ -8,25 +8,40 @@ Fase atual: **base mínima da V2**. Spec completa em `docs/spec-v2-base.md` — 
 
 - Construir só o que a spec descreve, com os ajustes de "Interface" abaixo. A seção "Fora desta base" da spec lista o que NÃO implementar; serve apenas para o modelo de dados não bloquear etapas futuras.
 - A base está pronta quando os 12 critérios de aceite da spec passam.
-- Editar e apagar `MainTask` e `MiniTask` não estão especificados. Perguntar antes de implementar.
+- Editar `MainTask` e `MiniTask` não está especificado: perguntar antes de implementar. Apagar miniTask foi pedido pelo usuário (menu do botão direito, abaixo); apagar `MainTask` inteira só acontece junto com o último passo dela.
 
 ## Interface (ajustes sobre a spec)
 
-- Tela única: "Em foco" numa barra estreita à esquerda (1/4 da largura, mínimo 18rem), banco de tarefas à direita. No celular, empilhados, "Em foco" primeiro. "Em foco" é a agenda da spec (faixa sem hora + faixas de 1h), mas mostra só hoje por padrão. O campo "Dias" mostra de 1 a 7 dias a partir de hoje (`models/focus.ts`). A escolha não fica salva.
+- Tela única: "Em foco" numa barra estreita à esquerda (1/4 da largura, mínimo 18rem), banco de tarefas à direita. No celular, empilhados, "Em foco" primeiro. "Em foco" é a agenda da spec (faixa sem hora + faixas de 1h), mas mostra só hoje por padrão. O campo "Dias" mostra de 1 a 7 dias a partir de hoje (`models/focus.ts`). A escolha não fica salva. A largura do "Em foco" se ajusta arrastando a borda direita dele (`components/ResizeHandle.tsx`, só a partir de 1024 px; também pelas setas esquerda e direita com a barra em foco): mínimo 18rem, e o banco mantém pelo menos 360 px. O botão "Em foco" no topo, ao lado do título, fecha e abre o painel (o banco ocupa a tela toda enquanto fechado); fechar e abrir mantém o número de dias, mas não a largura nem a rolagem. Nada disso fica salvo ao recarregar.
 - Nó da tarefa principal no banco: cada `MainTask` com miniTasks no banco aparece como um card maior, com o nome, e todas as miniTasks dela ligam nele (estrela). Substitui a ligação em sequência da spec (critério "ligados em sequência, pela ordem dos passos"). Sem miniTasks no banco, o nó some. Ele pode ser arrastado dentro do banco (puxa o grupo), mas não é agendado nem abre detalhe. Id do nó: `main:<id>` (`models/bankGraph.ts`).
 - Banco de tarefas como o grafo do Obsidian: as miniTasks ligadas se atraem, as outras se afastam, e uma gravidade fraca puxa tudo para o centro. O grafo se mexe ao abrir, ao arrastar e quando uma miniTask entra ou sai; depois para. As posições não ficam salvas: a física recalcula ao abrir. Com `prefers-reduced-motion`, o grafo aparece já arranjado.
 - Um gesto só para mover e agendar: arrastar um card dentro do banco puxa o card (os ligados vêm atrás). Se o ponteiro sai do banco, o card fica apagado no lugar e uma cópia segue o ponteiro até o "Em foco". Soltar no banco deixa o card ali; uma miniTask que volta do "Em foco" aparece onde foi solta.
 - Fundo de pontos do banco fixo: o pan e o zoom movem só os cards e as linhas.
 - MiniTasks arrastam entre banco e foco, e dentro do foco.
 - Botão "Nova tarefa" abre o formulário de cadastro num modal.
+- Hora exata (ex.: 13:23): o passo continua na faixa da hora dele (13:00) e o cartão mostra a hora exata (`hasExactMinutes`, `hourSlotOf`, `setMiniTaskTime` em `models/miniTask.ts`; dentro da faixa, ordenados pela hora). Define-se por "Definir hora…" no menu do botão direito (só passos já agendados) ou pelo botão "Definir hora" no modal de detalhe, os dois abrem `components/SetTimeDialog.tsx` (campo de hora; "Tirar a hora" volta o passo para "Sem hora" do dia). Arrastar para outra faixa põe a hora cheia dela (13:23 solto em 14:00 vira 14:00); soltar na mesma faixa mantém a hora exata.
+- Menu do botão direito (ou toque longo) em qualquer cartão de miniTask, no banco e no "Em foco" (`components/MiniTaskContextMenu.tsx`, Radix `ContextMenu`; as ações vêm do `MiniTaskMenuContext`, fornecido por `OverviewView`): **Copiar para** abre um submenu com "Banco de tarefas" e só os dias que o "Em foco" está mostrando (o campo "Dias"; `upcomingDays` em `models/focus.ts`, só o nome do dia da semana, sem data, com "(hoje)" no primeiro; `OverviewView` guarda o número de dias que `FocusArea` informa em `onDayCountChange`) e cria outra miniTask igual (mesma `MainTask` e texto, no fim dos passos, não feita) no destino escolhido; num dia, mantém a hora do original. Serve para fazer o mesmo passo em dias diferentes; **Novo passo** abre um modal e cria um passo no banco, na `MainTask` do cartão; **Deletar** pede confirmação e apaga a miniTask, e se for o único passo da `MainTask`, apaga a `MainTask` também (ela precisa de pelo menos 1 passo).
 - Cor da `MainTask` sorteada entre as cores livres da paleta (`models/colors.ts`). Repete só quando a paleta esgota.
 - Clique numa miniTask abre modal de detalhe: nome e descrição da `MainTask`, a miniTask clicada e as outras miniTasks não feitas da mesma `MainTask`.
+
+- Esforço (`Effort`: fácil, médio, difícil) é campo da `MainTask`, escolhido no formulário (padrão médio). Define a prioridade na sugestão de tarefas. `MiniTask.doneAt` guarda quando foi marcada como feita.
+- Tarefa não feita (`models/overdue.ts`): miniTask planejada para um dia antes de hoje e não feita. Sem prazo na `MainTask`: passa sozinha para hoje (ao abrir o app, mantém a hora). Com prazo: `OverdueDialog` obriga a escolher, uma por vez, entre "Postergar para hoje" (continua na agenda, não muda o prazo) e "Esquecer" (volta ao banco e fica guardada).
+- Escolher tarefas do dia (`views/PickView.tsx`, rota `/escolher`, segunda opção ao lado da visão geral): como um baralho. Mostra uma miniTask do banco por vez, sorteada por prioridade com um pouco de acaso (`models/suggestion.ts`: peso fácil 1, médio 2, difícil 3). Deslizar à direita (ou seta direita, botão "Vou fazer") roda a tarefa: vai para hoje e fica em andamento (`startMiniTask`). Deslizar à esquerda deixa no banco e a tarefa não volta nessa rodada; "Ver de novo" refaz o sorteio. `components/SwipeCard.tsx` faz o gesto. Dos lados do cartão aparecem, apagadas (`GhostCard`, só a partir de 768 px), a última tarefa decidida (esquerda) e a próxima (direita). Botão "Nova tarefa" na própria tela: a tarefa criada entra no fim da fila, sem refazer o sorteio. No canto de cima à esquerda, o botão "Escolhidas (N)" abre um painel à esquerda (`TodayPanel`, um `Dialog` encostado na esquerda) com tudo que está no plano de hoje, escolhido ali ou antes: dá para marcar como feita ou tirar de hoje (volta ao banco). O contador "Hoje: N escolhidas" conta essa mesma lista. Com o painel ou um formulário aberto, as setas do teclado não passam cartões. Visual simples de propósito: primeiro o sistema.
+
+## Perfil
+
+- Tela própria (`views/ProfileView.tsx`, rota `/perfil`), não um painel: foto, nome, e-mail, "Trocar foto", "Usar o gatinho", "Sair" e atalhos para "Visão geral" e "Escolher tarefas do dia". Também tem "Nome" (editar o nome, vai para `PUT /users/me`). Só abre para quem entrou. Não há troca de senha: a API ainda não tem rota para isso. Mais funções entram nessa tela depois.
+- Botão redondo com a foto da pessoa no canto de cima à direita da visão geral e da tela de escolher (`components/ProfileButton.tsx`, um link para `/perfil`).
+- O nome "Tarefinhas" no canto de cima à esquerda (`components/AppBrand.tsx`) é um link para a visão geral (`/tarefas`) e aparece na visão geral, na tela de escolher e no perfil. A homepage e o admin não têm.
+- Quem entrou aparece como `Profile` (`models/profile.ts`: nome, e-mail, foto; sem senha). Nome e e-mail vêm da API (`GET /users/me`). A foto a API ainda não guarda: fica no navegador, separada por id da conta (`models/repositories/sessionStorage.ts`), então "Sair" e entrar de novo mantêm a foto naquele navegador.
+- Foto: padrão é um gatinho (`public/default-cat.svg`). "Trocar foto" lê uma imagem do computador (até 8 MB), corta o maior quadrado centralizado, reduz a 256 px e guarda como JPEG no navegador (`components/profilePhoto.ts`); "Usar o gatinho" volta ao padrão. A foto fica só naquele navegador (a API não tem campo de foto).
 
 ## Homepage (entrar e criar conta)
 
 - Primeira tela do app (`views/HomeView.tsx`), em `/`. Abas "Entrar" e "Criar conta" no mesmo painel. A aba ativa fica na URL: `?mode=sign-up` (`useSearchParams`).
-- Sem login por enquanto: "Entrar" e "Criar conta" levam direto para `/tarefas`, sem conferir o formulário nem conta. `/tarefas` abre sem login. O backend já tem login (`/auth/sign-in`, `/auth/sign-up`, ver "Backend"); falta o frontend chamar: a validação (`validateSignIn`/`validateSignUp` em `models/auth.ts`) e a chamada da API entram no `AuthProvider`.
-- Entrar: e-mail e senha. Criar conta: nome, e-mail, senha (mínimo 8 caracteres) e confirmar senha. Regras em `models/auth.ts`.
+- Login pela API do backend (`/auth/sign-in`, `/auth/sign-up`, `GET`/`PUT /users/me`; ver "Backend"): `AuthProvider` valida o formulário (`models/auth.ts`, mesmas regras e mensagens do backend: a senha do cadastro precisa de 8+ caracteres, maiúscula, minúscula, número e símbolo) e chama `models/repositories/authApi.ts`. O token JWT que a API devolve fica em `localStorage` (`tarefinhas.token`) e vai no cabeçalho `Authorization: Bearer`. Ao abrir o app com token salvo, o `AuthProvider` confere com `GET /users/me` (`restoring`) antes de decidir; token recusado (401) é apagado. Erros da API vêm como `{ errors: { campo: mensagem } }`; a chave `form` (login errado) aparece sob a senha. Endereço da API: `VITE_API_URL` (padrão `http://localhost:8080`; ver `frontend/.env.example`). A API só aceita a origem `http://localhost:5173` por padrão (`CORS_ALLOWED_ORIGINS` no `.env` da raiz).
+- Sem entrar não se abre nenhuma tela do app: `components/RequireAuth.tsx` leva `/tarefas`, `/escolher` e `/perfil` para a homepage, lembra a tela pedida e, depois de entrar, abre essa tela. Quem saiu de propósito (`justSignedOut`) entra de novo na visão geral. O admin (`/admin`, só em desenvolvimento) não exige entrar.
+- Entrar: e-mail e senha. Criar conta: nome, e-mail, senha (regra forte, igual ao backend) e confirmar senha. Regras em `models/auth.ts`.
 - "Esqueci a senha" e "Continuar com Google" mostram um aviso de que ainda não estão disponíveis.
 - Layout sem divisão de colunas: fundo 3D na tela toda, formulário por cima, à esquerda (no celular, abaixo das bolhas).
 - Fundo 3D (`components/HomeBackdrop.tsx`, Three.js via `@react-three/fiber` e `@react-three/drei`): bolhas de vidro líquido denso, como a cera de uma lâmpada de lava (não bolha de sabão). Um shader próprio (`GLASS_FRAGMENT`, `glassShaders`, `GlassShape`) calcula 3 coisas na mesma forma: o filtro (o vidro tinge o que aparece através dele), o corpo (material denso que esconde parte do que está atrás, com 3 tons que fluem, brilho interno no lado oposto à luz e tom profundo perto da borda) e os reflexos (borda brilhante, brilho largo, ponto de brilho, luz colorida na borda). Na tela: (o que está atrás × filtro × parte não escondida) + corpo + reflexos. O blending não faz isso em 1 desenho, então cada bolha desenha 2 vezes com o mesmo shader (`uPass`): primeiro multiplica (`ZeroFactor` × `SrcColorFactor`), depois soma (`OneFactor` + `OneFactor`). Com opacidade 0 o resultado é o vidro só-filtro da versão anterior. Só formas largas nos reflexos. Formato redondo que "respira" com ondas lentas; a normal é recalculada na superfície ondulada. Texto das bolhas em branco.
@@ -68,9 +83,9 @@ Glossário da spec (português) para o código (inglês). Usar sempre estes nome
 | Criar conta | `signUp` | Criar conta |
 | Homepage | `HomeView` | (tela de entrada) |
 
-Campos de `MainTask`: `id`, `name`, `description`, `deadlineDays`, `color`, `createdAt`.
+Campos de `MainTask`: `id`, `name`, `description`, `deadlineDays`, `effort`, `color`, `createdAt`.
 
-Campos de `MiniTask`: `id`, `mainTaskId`, `text`, `position` (spec: `ordem`), `done`, `inProgress`, `scheduledDate` (spec: `agendadoPara`, `YYYY-MM-DD` local), `scheduledTime` (spec: `horaAgendada`, `HH:00`), `createdAt`.
+Campos de `MiniTask`: `id`, `mainTaskId`, `text`, `position` (spec: `ordem`), `done`, `doneAt`, `inProgress`, `scheduledDate` (spec: `agendadoPara`, `YYYY-MM-DD` local), `scheduledTime` (spec: `horaAgendada`, `HH:mm`: `HH:00` na faixa da hora, ou uma hora exata como `13:23`), `createdAt`.
 
 `position` substitui `order` porque `ORDER` é palavra reservada em SQL e o backend vai ter banco relacional.
 
@@ -83,7 +98,7 @@ Frontend e backend seguem MVC. Cada camada só conhece a camada abaixo dela: Vie
 | Camada | Responsabilidade | Onde fica |
 |---|---|---|
 | Model | Tipos, regras de domínio puras (validação, cor, agendar) e repositórios | `src/models/` |
-| Controller | `TasksProvider` (context): carrega dados, guarda estado, expõe ações. Acesso via `useTasks()`. `AuthProvider`: entrar/criar conta (hoje sempre aceita). Acesso via `useAuth()` | `src/controllers/` |
+| Controller | `TasksProvider` (context): carrega dados, guarda estado, expõe ações. Acesso via `useTasks()`. `AuthProvider`: entrar e criar conta pela API, guarda o token e quem entrou, troca nome (API) e foto (navegador). Acesso via `useAuth()` | `src/controllers/` |
 | View | Telas e componentes React/shadcn. Só renderizam e repassam eventos ao Controller | `src/views/` (telas), `src/components/` (componentes), `src/components/ui/` (gerados pelo shadcn, não editar à mão) |
 
 - Repositórios ficam atrás das interfaces de `src/models/repositories/types.ts`. A implementação (IndexedDB hoje, API Java depois) é escolhida num único ponto: topo de `src/controllers/TasksProvider.tsx`.
@@ -132,7 +147,7 @@ Reaproveitada do projeto budgie (`~/IFPR/6-PW/budgie/budgie-backend`): Spring Se
 - Vite + React 19 + TypeScript, PWA via `vite-plugin-pwa`
 - Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) (preset Nova, base Radix). Adicionar componente: `npx shadcn@latest add <nome>`
 - IndexedDB via `idb`
-- React Router (`react-router`): rotas em `src/views/routes.ts` (`/`, `/tarefas`, `/admin` só em desenvolvimento; endereço desconhecido volta para `/`). Montadas em `App.tsx`
+- React Router (`react-router`): rotas em `src/views/routes.ts` (`/`, `/tarefas`, `/escolher`, `/perfil`, `/admin` só em desenvolvimento; endereço desconhecido volta para `/`). Montadas em `App.tsx`
 - `@xyflow/react` (React Flow): desenha o grafo do banco. `d3-force`: física do banco. `@dnd-kit/core`: arrastar. `date-fns`: datas
 - Gerenciador de pacotes: npm
 
@@ -192,11 +207,18 @@ Registrar aqui decisões tomadas ao longo do desenvolvimento (data + decisão + 
 - 2026-11-23 — `POST /main-tasks` cria a tarefa com os passos como `miniTasks: [{ text }]`. O backend gera id, data e cor; validação com Bean Validation; resposta 201 com o grupo criado; erros no formato `{ errors: { campo: mensagem } }` do frontend. Motivo: a API não confia no cliente, e o formulário mostra os erros sem adaptar.
 - 2026-11-23 — Tabelas pelo Hibernate (`ddl-auto=update`), sem Flyway. Motivo: escolha do usuário nesta fase.
 - 2026-11-23 — Autenticação reaproveitada do projeto budgie (JWT sem sessão, BCrypt, mesma regra de senha forte). Só entrar, criar conta e editar o nome do usuário; recuperar senha fica para depois (precisa de e-mail). Sem papéis (`AuthRole` removido). Cada `MainTask` tem dono. Criar conta já devolve o token. Motivo: reaproveitar uma implementação conhecida; o app não tem administrador.
+- 2026-11-23 — Passa a valer o documento "TAREFINHAS V2" (log do sistema). Primeiro o sistema funcionando, sem mexer no visual elaborado. Esforço fácil/médio/difícil; tarefa não feita sem prazo passa sozinha ao dia seguinte, com prazo pergunta; esquecida fica no banco.
+- 2026-11-23 — Tela "Escolher tarefas do dia", estilo Tinder, como segunda opção de planejar. Motivo: pedido do usuário; é a "visão reduzida" do documento.
+- 2026-11-23 — Menu do botão direito nos cartões (copiar, novo passo, deletar). Motivo: pedido do usuário, para fazer a mesma tarefa em dias diferentes. Copiar vira "Copiar para" (banco ou os dias que o "Em foco" mostra, sem datas), a pedido do usuário; apagar o último passo apaga a tarefa.
+- 2026-11-23 — "Em foco" com largura ajustável por arraste e botão para abrir e fechar. Motivo: pedido do usuário; com 3 ou 4 dias o painel estreito ficava apertado.
+- 2026-11-23 — Hora exata nos passos (compromissos pontuais como 13:23), sem mudar as faixas de 1 hora. Motivo: pedido do usuário; as faixas de hora cheia não cabiam um compromisso com minutos. Arrastar para outra faixa vira a hora cheia dela.
+- 2026-11-23 — Perfil da pessoa (foto, nome, e-mail, atalhos e sair) numa tela própria (`/perfil`), e o nome "Tarefinhas" no canto de cima à esquerda de todas as telas do app, levando à visão geral. Motivo: pedido do usuário (o perfil primeiro foi um painel, e ele quis uma tela separada). O perfil fica salvo no navegador porque ainda não há servidor nem login de verdade; foto padrão de gatinho.
+- 2026-11-23 — Telas do app só abrem com login (`RequireAuth`). Motivo: pedido do usuário.
+- 2026-11-23 — A autenticação feita no navegador (contas e senha com hash no `localStorage`, conta fictícia, trocar senha) foi removida: o frontend usa o login do backend do Shiro (`/auth/sign-in`, `/auth/sign-up`, `/users/me`). Motivo: o backend com banco (Neon) e JWT já existe. A troca de senha saiu porque a API não tem rota para ela; a foto continua no navegador porque a API não tem foto. Testes sempre contra o backend real (`docker compose up --build`), nunca com um servidor de mentira.
 
 ## Pendências a definir
 
-- Ligar o frontend à API (trocar o IndexedDB pelos endpoints, guardar o token, `AuthProvider` chamando `/auth/sign-in` e `/auth/sign-up`)
-- Regra de senha do frontend (`models/auth.ts`, hoje só 8 caracteres) ainda não segue a regra forte do backend
+- Ligar as tarefas à API (trocar o IndexedDB pelos endpoints; o login já usa a API)
 - Passo em branco: o frontend descarta, o backend responde 400 em `miniTasks[i].text`; o formulário espera o erro em `steps`
 - Recuperar senha e trocar senha
 - Migrações de schema (hoje `ddl-auto=update`)

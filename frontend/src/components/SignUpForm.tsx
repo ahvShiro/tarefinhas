@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SignUpResult } from '@/controllers/authContext'
-import { MIN_PASSWORD_LENGTH, type SignUpErrors, type SignUpInput } from '@/models/auth'
+import { PASSWORD_RULE_HINT, type SignUpErrors, type SignUpInput } from '@/models/auth'
 import { AuthField, GoogleIcon, Notice, OrDivider, PasswordField } from './AuthField'
 import { focusFirstInvalid, PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from './authForm'
 
@@ -70,7 +70,7 @@ export function SignUpForm({ onSubmit }: SignUpFormProps) {
         value={values.password}
         onChange={handleChange}
         error={errors.password}
-        hint={`Pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`}
+        hint={PASSWORD_RULE_HINT}
       />
       <PasswordField
         id="sign-up-password-confirmation"

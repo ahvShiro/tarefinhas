@@ -1,10 +1,23 @@
 import { addDays } from 'date-fns'
 
+/** How hard the task is. It sets the priority: harder tasks come first when the system suggests tasks. */
+export type Effort = 'easy' | 'medium' | 'hard'
+
+export const EFFORTS: readonly Effort[] = ['easy', 'medium', 'hard']
+export const DEFAULT_EFFORT: Effort = 'medium'
+
+export const EFFORT_LABELS: Record<Effort, string> = {
+  easy: 'Fácil',
+  medium: 'Médio',
+  hard: 'Difícil',
+}
+
 export interface MainTask {
   id: string
   name: string
   description: string
   deadlineDays?: number
+  effort: Effort
   color: string
   createdAt: string
 }

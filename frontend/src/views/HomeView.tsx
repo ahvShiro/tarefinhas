@@ -1,6 +1,6 @@
 import { Undo2 } from 'lucide-react'
 import { lazy, Suspense, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { BackdropBoundary } from '@/components/BackdropBoundary'
 import type { HomeBackdropHandle } from '@/components/HomeBackdrop'
 import { SignInForm } from '@/components/SignInForm'
@@ -36,6 +36,9 @@ interface HomeViewProps {
 export function HomeView({ bubbleTheme = DEFAULT_BUBBLE_THEME }: HomeViewProps) {
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
+  // A screen of the app that asked for sign-in (see RequireAuth) is where the person goes after signing in.
+  const asked = (useLocation().state as { from?: string } | null)?.from
+  const destination = asked === ROUTES.pick || asked === ROUTES.profile ? asked : ROUTES.tasks
   // The active tab lives in the URL (?mode=sign-up), so a link can open the sign-up form directly.
   const [searchParams, setSearchParams] = useSearchParams()
   const mode: Mode = searchParams.get(MODE_PARAM) === 'sign-up' ? 'sign-up' : 'sign-in'
@@ -49,13 +52,13 @@ export function HomeView({ bubbleTheme = DEFAULT_BUBBLE_THEME }: HomeViewProps) 
 
   async function handleSignIn(input: SignInInput) {
     const result = await signIn(input)
-    if (result.ok) void navigate(ROUTES.tasks)
+    if (result.ok) void navigate(destination)
     return result
   }
 
   async function handleSignUp(input: SignUpInput) {
     const result = await signUp(input)
-    if (result.ok) void navigate(ROUTES.tasks)
+    if (result.ok) void navigate(destination)
     return result
   }
 
