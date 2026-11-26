@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Gatinho">
+  <rect width="128" height="128" fill="#fde9c9"/>
+  <path d="M26 58 L30 22 L56 40 Z" fill="#f2a65a"/>
+  <path d="M102 58 L98 22 L72 40 Z" fill="#f2a65a"/>
+  <path d="M32 50 L34 31 L48 41 Z" fill="#f7c6c0"/>
+  <path d="M96 50 L94 31 L80 41 Z" fill="#f7c6c0"/>
+  <ellipse cx="64" cy="72" rx="42" ry="38" fill="#f2a65a"/>
+  <path d="M64 36 V50 M52 38 L55 50 M76 38 L73 50" stroke="#d98336" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="64" cy="84" rx="16" ry="12" fill="#fff4e3"/>
+  <ellipse cx="48" cy="68" rx="5" ry="7" fill="#2b2433"/>
+  <ellipse cx="80" cy="68" rx="5" ry="7" fill="#2b2433"/>
+  <circle cx="49.5" cy="65.5" r="1.8" fill="#fff"/>
+  <circle cx="81.5" cy="65.5" r="1.8" fill="#fff"/>
+  <path d="M60 79 H68 L64 84 Z" fill="#e5798a"/>
+  <path d="M64 84 V88 M64 88 Q58 93 53 89 M64 88 Q70 93 75 89" stroke="#2b2433" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M44 84 L22 80 M44 88 L22 90 M84 84 L106 80 M84 88 L106 90" stroke="#7a5a3a" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

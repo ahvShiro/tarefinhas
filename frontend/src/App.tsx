@@ -1,10 +1,13 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from '@/controllers/AuthProvider'
+import { RequireAuth } from '@/components/RequireAuth'
 import { usePreviewBubbleTheme } from '@/controllers/bubbleThemePreview'
 import { TasksProvider } from '@/controllers/TasksProvider'
 import { HomeView } from '@/views/HomeView'
 import { OverviewView } from '@/views/OverviewView'
+import { PickView } from '@/views/PickView'
+import { ProfileView } from '@/views/ProfileView'
 import { ROUTES } from '@/views/routes'
 
 // Admin page of the homepage bubbles: only on the dev server. The production build leaves it out.
@@ -27,9 +30,29 @@ export default function App() {
           <Route
             path={ROUTES.tasks}
             element={
-              <TasksProvider>
-                <OverviewView />
-              </TasksProvider>
+              <RequireAuth>
+                <TasksProvider>
+                  <OverviewView />
+                </TasksProvider>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path={ROUTES.pick}
+            element={
+              <RequireAuth>
+                <TasksProvider>
+                  <PickView />
+                </TasksProvider>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path={ROUTES.profile}
+            element={
+              <RequireAuth>
+                <ProfileView />
+              </RequireAuth>
             }
           />
           {AdminView && (

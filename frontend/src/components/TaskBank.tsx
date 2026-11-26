@@ -256,7 +256,7 @@ export function TaskBank(props: TaskBankProps) {
     <section
       ref={setNodeRef}
       className={cn(
-        'relative flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card',
+        'relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card',
         isOver && 'ring-2 ring-primary',
       )}
     >

@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { pickRandomColor } from '@/models/colors'
-import type { MainTask } from '@/models/mainTask'
+import { DEFAULT_EFFORT, type MainTask } from '@/models/mainTask'
 import { validateMainTaskInput, type MainTaskInput } from '@/models/mainTaskInput'
 import {
+  createStep,
+  duplicateMiniTask,
+  nextPosition,
   scheduleMiniTask as scheduled,
+  setMiniTaskTime as withTime,
+  startMiniTask,
   toggleMiniTaskDone,
   unscheduleMiniTask as unscheduled,
   type MiniTask,
 } from '@/models/miniTask'
+import { moveToToday, splitOverdue, todayKey } from '@/models/overdue'
 import { createIndexedDbRepositories } from '@/models/repositories/indexedDb'
 import { TasksContext, type CreateMainTaskResult, type TasksContextValue } from './tasksContext'
 
@@ -22,10 +28,17 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     Promise.all([repositories.mainTasks.listAll(), repositories.miniTasks.listAll()]).then(
-      ([loadedMainTasks, loadedMiniTasks]) => {
+      async ([loadedMainTasks, loadedMiniTasks]) => {
+        // Tasks saved before the effort field existed get the default effort.
+        const normalized = loadedMainTasks.map((task) => ({ ...task, effort: task.effort ?? DEFAULT_EFFORT }))
+        // Rule for tasks not done: without a deadline, they move to today by themselves.
+        const byId = new Map(normalized.map((task) => [task.id, task]))
+        const { rolled } = splitOverdue(loadedMiniTasks, (id) => byId.get(id), todayKey())
+        await Promise.all(rolled.map((miniTask) => repositories.miniTasks.update(miniTask)))
         if (cancelled) return
-        setMainTasks(loadedMainTasks)
-        setMiniTasks(loadedMiniTasks)
+        const rolledById = new Map(rolled.map((miniTask) => [miniTask.id, miniTask]))
+        setMainTasks(normalized)
+        setMiniTasks(loadedMiniTasks.map((miniTask) => rolledById.get(miniTask.id) ?? miniTask))
         setLoading(false)
       },
     )
@@ -50,6 +63,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         name: cleaned.name,
         description: cleaned.description,
         deadlineDays: cleaned.deadlineDays,
+        effort: cleaned.effort,
         color: pickRandomColor(mainTasks.map((task) => task.color)),
         createdAt: now,
       }
@@ -98,6 +112,82 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     [updateMiniTask],
   )
 
+  const copyMiniTask = useCallback(
+    async (miniTaskId: string, date?: string) => {
+      const source = miniTasks.find((miniTask) => miniTask.id === miniTaskId)
+      if (!source) return
+      const duplicate = duplicateMiniTask(
+        source,
+        nextPosition(miniTasks, source.mainTaskId),
+        crypto.randomUUID(),
+        new Date().toISOString(),
+      )
+      const copy = date === undefined ? duplicate : scheduled(duplicate, date, source.scheduledTime)
+      await repositories.miniTasks.create(copy)
+      setMiniTasks((list) => [...list, copy])
+    },
+    [miniTasks],
+  )
+
+  const addStep = useCallback(
+    async (mainTaskId: string, text: string) => {
+      const cleaned = text.trim()
+      if (cleaned === '' || !mainTasksById.has(mainTaskId)) return false
+      const step = createStep(
+        mainTaskId,
+        cleaned,
+        nextPosition(miniTasks, mainTaskId),
+        crypto.randomUUID(),
+        new Date().toISOString(),
+      )
+      await repositories.miniTasks.create(step)
+      setMiniTasks((list) => [...list, step])
+      return true
+    },
+    [miniTasks, mainTasksById],
+  )
+
+  const deleteMiniTask = useCallback(
+    async (miniTaskId: string) => {
+      const target = miniTasks.find((miniTask) => miniTask.id === miniTaskId)
+      if (!target) return
+      const isLastStep = miniTasks.filter((miniTask) => miniTask.mainTaskId === target.mainTaskId).length === 1
+      if (isLastStep) {
+        // A MainTask needs at least 1 step: without any, it goes too.
+        await repositories.mainTasks.deleteWithMiniTasks(target.mainTaskId)
+        setMainTasks((list) => list.filter((mainTask) => mainTask.id !== target.mainTaskId))
+        setMiniTasks((list) => list.filter((miniTask) => miniTask.mainTaskId !== target.mainTaskId))
+      } else {
+        await repositories.miniTasks.delete(miniTaskId)
+        setMiniTasks((list) => list.filter((miniTask) => miniTask.id !== miniTaskId))
+      }
+    },
+    [miniTasks],
+  )
+
+  const setMiniTaskTime = useCallback(
+    (miniTaskId: string, time?: string) => updateMiniTask(miniTaskId, (miniTask) => withTime(miniTask, time)),
+    [updateMiniTask],
+  )
+
+  const runMiniTask = useCallback(
+    (miniTaskId: string) => updateMiniTask(miniTaskId, (miniTask) => startMiniTask(miniTask, todayKey())),
+    [updateMiniTask],
+  )
+
+  const overdueMiniTasks = useMemo(
+    () => splitOverdue(miniTasks, getMainTask, todayKey()).needsChoice,
+    [miniTasks, getMainTask],
+  )
+
+  const postponeMiniTask = useCallback(
+    (miniTaskId: string) => updateMiniTask(miniTaskId, (miniTask) => moveToToday(miniTask, todayKey())),
+    [updateMiniTask],
+  )
+
+  // Forgetting sends it back to the task bank, where it stays saved.
+  const forgetMiniTask = unscheduleMiniTask
+
   const value = useMemo<TasksContextValue>(
     () => ({
       loading,
@@ -108,8 +198,33 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       toggleDone,
       scheduleMiniTask,
       unscheduleMiniTask,
+      copyMiniTask,
+      addStep,
+      deleteMiniTask,
+      setMiniTaskTime,
+      runMiniTask,
+      overdueMiniTasks,
+      postponeMiniTask,
+      forgetMiniTask,
     }),
-    [loading, mainTasks, miniTasks, getMainTask, createMainTask, toggleDone, scheduleMiniTask, unscheduleMiniTask],
+    [
+      loading,
+      mainTasks,
+      miniTasks,
+      getMainTask,
+      createMainTask,
+      toggleDone,
+      scheduleMiniTask,
+      unscheduleMiniTask,
+      copyMiniTask,
+      addStep,
+      deleteMiniTask,
+      setMiniTaskTime,
+      runMiniTask,
+      overdueMiniTasks,
+      postponeMiniTask,
+      forgetMiniTask,
+    ],
   )
 
   return <TasksContext.Provider value={value}>{children}</TasksContext.Provider>

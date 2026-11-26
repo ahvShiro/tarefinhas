@@ -13,7 +13,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { CreateMainTaskResult } from '@/controllers/tasksContext'
-import { MAX_DEADLINE_DAYS, MIN_DEADLINE_DAYS } from '@/models/mainTask'
+import {
+  DEFAULT_EFFORT,
+  EFFORT_LABELS,
+  EFFORTS,
+  MAX_DEADLINE_DAYS,
+  MIN_DEADLINE_DAYS,
+  type Effort,
+} from '@/models/mainTask'
 import type { MainTaskInput, MainTaskInputErrors } from '@/models/mainTaskInput'
 
 interface StepField {
@@ -45,6 +52,7 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
   const [description, setDescription] = useState('')
   const [steps, setSteps] = useState<StepField[]>(() => [newStep()])
   const [deadlineDays, setDeadlineDays] = useState('')
+  const [effort, setEffort] = useState<Effort>(DEFAULT_EFFORT)
   const [errors, setErrors] = useState<MainTaskInputErrors>({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -53,6 +61,7 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
     setDescription('')
     setSteps([newStep()])
     setDeadlineDays('')
+    setEffort(DEFAULT_EFFORT)
     setErrors({})
   }
 
@@ -68,7 +77,7 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
     event.preventDefault()
     setSubmitting(true)
     try {
-      const result = await onSubmit({ name, description, steps: steps.map((step) => step.text), deadlineDays })
+      const result = await onSubmit({ name, description, steps: steps.map((step) => step.text), deadlineDays, effort })
       if (!result.ok) {
         setErrors(result.errors)
         return
@@ -146,6 +155,25 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
               Adicionar passo
             </Button>
             <FieldError id="main-task-steps-error" message={errors.steps} />
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1.5 text-sm font-medium">Esforço</legend>
+            <div className="flex gap-2">
+              {EFFORTS.map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  size="sm"
+                  variant={effort === option ? 'default' : 'outline'}
+                  aria-pressed={effort === option}
+                  onClick={() => setEffort(option)}
+                >
+                  {EFFORT_LABELS[option]}
+                </Button>
+              ))}
+            </div>
+            <FieldError id="main-task-effort-error" message={errors.effort} />
           </fieldset>
 
           <div className="flex flex-col gap-1.5">
