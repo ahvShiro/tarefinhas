@@ -1,3 +1,4 @@
+import { EditNotSupportedError } from './types'
 import type { Effort, MainTask } from '../mainTask'
 import type { CleanMainTaskInput } from '../mainTaskInput'
 import type { MiniTask } from '../miniTask'
@@ -117,6 +118,12 @@ export function createApiTaskRepository(): TaskRepository {
 
     async deleteMiniTask(miniTaskId: string) {
       await request<void>(`/mini-tasks/${miniTaskId}`, { method: 'DELETE' })
+    },
+
+    // The API has no route to edit yet (no PATCH /main-tasks/{id}; PATCH /mini-tasks/{id} has no text and always
+    // applies the schedule). When the backend adds them, call them here; nothing else changes.
+    async editMainTask() {
+      throw new EditNotSupportedError()
     },
   }
 }

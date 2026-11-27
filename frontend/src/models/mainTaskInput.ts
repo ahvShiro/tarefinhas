@@ -63,3 +63,47 @@ export function duplicateMainTaskInput(source: MainTask, steps: string[]): Clean
     effort: source.effort,
   }
 }
+
+/** What the "Editar tarefa" form sends: the MainTask fields and the new text of each existing step, by id. */
+export interface MainTaskEditInput {
+  name: string
+  description: string
+  /** Raw text from the form. Empty means no deadline. */
+  deadlineDays: string
+  effort: Effort
+  steps: { id: string; text: string }[]
+}
+
+export interface CleanMainTaskEdit {
+  name: string
+  description: string
+  deadlineDays?: number
+  effort: Effort
+  steps: { id: string; text: string }[]
+}
+
+export type MainTaskEditValidation =
+  | { ok: true; cleaned: CleanMainTaskEdit }
+  | { ok: false; errors: MainTaskInputErrors }
+
+/**
+ * Same rules as the sign-up form for name, description, effort and deadline. A step cannot be left empty here:
+ * to take a step out, the person deletes it (menu of the step), so an edit never deletes by accident.
+ */
+export function validateMainTaskEdit(input: MainTaskEditInput): MainTaskEditValidation {
+  const base = validateMainTaskInput({
+    name: input.name,
+    description: input.description,
+    deadlineDays: input.deadlineDays,
+    effort: input.effort,
+    steps: ['-'],
+  })
+  const errors: MainTaskInputErrors = base.ok ? {} : { ...base.errors }
+  const steps = input.steps.map((step) => ({ id: step.id, text: step.text.trim() }))
+  if (steps.some((step) => step.text === '')) {
+    errors.steps = 'Um passo não pode ficar vazio. Para tirar um passo, use “Deletar” no menu dele.'
+  }
+  if (Object.keys(errors).length > 0 || !base.ok) return { ok: false, errors }
+  const { name, description, deadlineDays, effort } = base.cleaned
+  return { ok: true, cleaned: { name, description, deadlineDays, effort, steps } }
+}

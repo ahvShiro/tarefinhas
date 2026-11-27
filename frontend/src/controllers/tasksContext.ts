@@ -1,9 +1,11 @@
 import { createContext } from 'react'
 import type { MainTask } from '@/models/mainTask'
-import type { MainTaskInput, MainTaskInputErrors } from '@/models/mainTaskInput'
+import type { MainTaskEditInput, MainTaskInput, MainTaskInputErrors } from '@/models/mainTaskInput'
 import type { MiniTask } from '@/models/miniTask'
 
 export type CreateMainTaskResult = { ok: true } | { ok: false; errors: MainTaskInputErrors }
+/** `savedOnServer: false`: the change shows now but is lost on reload (the backend cannot save edits yet). */
+export type EditMainTaskResult = { ok: true; savedOnServer: boolean } | { ok: false; errors: MainTaskInputErrors }
 
 export interface TasksContextValue {
   loading: boolean
@@ -25,6 +27,8 @@ export interface TasksContextValue {
   addStep(mainTaskId: string, text: string): Promise<boolean>
   /** Deletes a miniTask. Deleting the last one of a MainTask deletes the MainTask too. */
   deleteMiniTask(miniTaskId: string): Promise<void>
+  /** Changes the name, description, deadline, effort and step texts of a MainTask. */
+  editMainTask(mainTaskId: string, input: MainTaskEditInput): Promise<EditMainTaskResult>
   /** Copies a MainTask with all its steps. The copies go to the task bank, not done. */
   duplicateMainTask(mainTaskId: string): Promise<void>
   /** Deletes a MainTask and all its steps, in the bank and in the plan. */

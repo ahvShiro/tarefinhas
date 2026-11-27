@@ -9,6 +9,9 @@ import {
 import { EFFORT_LABELS, type MainTask } from '@/models/mainTask'
 import type { MiniTask } from '@/models/miniTask'
 import { MiniTaskCard } from './MiniTaskCard'
+import { StepNoteEditor } from './StepNoteEditor'
+import { SendPhotoButton, StepPhotoList } from './StepPhotos'
+import { useStepPhotos } from './useStepPhotos'
 
 interface MiniTaskDetailDialogProps {
   miniTask?: MiniTask
@@ -20,77 +23,92 @@ interface MiniTaskDetailDialogProps {
   onClose: () => void
 }
 
-export function MiniTaskDetailDialog({
+export function MiniTaskDetailDialog({ miniTask, mainTask, onClose, ...rest }: MiniTaskDetailDialogProps) {
+  return (
+    <Dialog open={Boolean(miniTask && mainTask)} onOpenChange={(next) => !next && onClose()}>
+      {miniTask && mainTask && <MiniTaskDetail miniTask={miniTask} mainTask={mainTask} {...rest} />}
+    </Dialog>
+  )
+}
+
+function MiniTaskDetail({
   miniTask,
   mainTask,
   siblings,
   onToggleDone,
   onSetTime,
-  onClose,
-}: MiniTaskDetailDialogProps) {
-  const open = Boolean(miniTask && mainTask)
-  const remaining = miniTask
-    ? siblings
-        .filter((sibling) => sibling.id !== miniTask.id && !sibling.done)
-        .sort((a, b) => a.position - b.position)
-    : []
+}: Omit<MiniTaskDetailDialogProps, 'onClose'> & { miniTask: MiniTask; mainTask: MainTask }) {
+  const photos = useStepPhotos(miniTask)
+  const remaining = siblings
+    .filter((sibling) => sibling.id !== miniTask.id && !sibling.done)
+    .sort((a, b) => a.position - b.position)
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      {miniTask && mainTask && (
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: mainTask.color }} />
-            <DialogTitle>{mainTask.name}</DialogTitle>
-            <DialogDescription className="whitespace-pre-wrap">{mainTask.description}</DialogDescription>
-            <p className="text-xs text-muted-foreground">
-              Esforço: {EFFORT_LABELS[mainTask.effort]}
-              {mainTask.deadlineDays !== undefined && ` · Prazo: ${mainTask.deadlineDays} dia(s)`}
-            </p>
-          </DialogHeader>
+    <DialogContent className="sm:max-w-md">
+      {/* "Enviar foto" sits at the top, next to the close button. */}
+      <div className="absolute top-2 right-10">
+        <SendPhotoButton state={photos} />
+      </div>
+      <DialogHeader className={photos.available ? 'pr-32' : undefined}>
+        <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: mainTask.color }} />
+        <DialogTitle>{mainTask.name}</DialogTitle>
+        <DialogDescription className="whitespace-pre-wrap">{mainTask.description}</DialogDescription>
+        <p className="text-xs text-muted-foreground">
+          Esforço: {EFFORT_LABELS[mainTask.effort]}
+          {mainTask.deadlineDays !== undefined && ` · Prazo: ${mainTask.deadlineDays} dia(s)`}
+        </p>
+      </DialogHeader>
 
-          <div className="flex flex-col gap-1.5">
-            <h3 className="text-xs font-medium text-muted-foreground">Passo {miniTask.position}</h3>
-            <MiniTaskCard
-              miniTask={miniTask}
-              color={mainTask.color}
-              className="w-full"
-              onToggleDone={() => onToggleDone(miniTask.id)}
-            />
-            {miniTask.scheduledDate !== undefined && (
-              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span>
-                  Planejado para {miniTask.scheduledDate.split('-').reverse().join('/')}
-                  {miniTask.scheduledTime ? ` às ${miniTask.scheduledTime}` : ', sem hora'}
-                </span>
-                <Button variant="outline" size="sm" onClick={() => onSetTime(miniTask.id)}>
-                  Definir hora
-                </Button>
-              </div>
-            )}
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-xs font-medium text-muted-foreground">Passo {miniTask.position}</h3>
+        <MiniTaskCard
+          miniTask={miniTask}
+          color={mainTask.color}
+          className="w-full"
+          onToggleDone={() => onToggleDone(miniTask.id)}
+        />
+        {miniTask.scheduledDate !== undefined && (
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              Planejado para {miniTask.scheduledDate.split('-').reverse().join('/')}
+              {miniTask.scheduledTime ? ` às ${miniTask.scheduledTime}` : ', sem hora'}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => onSetTime(miniTask.id)}>
+              Definir hora
+            </Button>
           </div>
+        )}
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <h3 className="text-xs font-medium text-muted-foreground">Restantes</h3>
-            {remaining.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma miniTask restante.</p>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {remaining.map((sibling) => (
-                  <li key={sibling.id}>
-                    <MiniTaskCard
-                      miniTask={sibling}
-                      color={mainTask.color}
-                      compact
-                      onToggleDone={() => onToggleDone(sibling.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </DialogContent>
-      )}
-    </Dialog>
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-xs font-medium text-muted-foreground">Fotos do passo</h3>
+        <StepPhotoList state={photos} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-xs font-medium text-muted-foreground">Nota do passo</h3>
+        <StepNoteEditor key={miniTask.id} miniTaskId={miniTask.id} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-xs font-medium text-muted-foreground">Restantes</h3>
+        {remaining.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma miniTask restante.</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {remaining.map((sibling) => (
+              <li key={sibling.id}>
+                <MiniTaskCard
+                  miniTask={sibling}
+                  color={mainTask.color}
+                  compact
+                  onToggleDone={() => onToggleDone(sibling.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </DialogContent>
   )
 }

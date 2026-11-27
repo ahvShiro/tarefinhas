@@ -34,3 +34,44 @@ export function buildSuggestionQueue(
     .sort((a, b) => a.key - b.key)
     .map((entry) => entry.id)
 }
+
+export interface RoundSummary {
+  /** Steps chosen ("Vou fazer") in this round, in the order they were chosen. */
+  chosen: { miniTask: MiniTask; mainTask: MainTask }[]
+  byEffort: Record<Effort, number>
+  /** Steps left for later ("Agora não") in this round. */
+  skipped: number
+}
+
+/** What happened in one round of the deck, for the summary at the end. */
+export function roundSummary(
+  chosenIds: string[],
+  skipped: number,
+  miniTasks: MiniTask[],
+  getMainTask: (id: string) => MainTask | undefined,
+): RoundSummary {
+  const byId = new Map(miniTasks.map((miniTask) => [miniTask.id, miniTask]))
+  const chosen = chosenIds.flatMap((id) => {
+    const miniTask = byId.get(id)
+    const mainTask = miniTask ? getMainTask(miniTask.mainTaskId) : undefined
+    return miniTask && mainTask ? [{ miniTask, mainTask }] : []
+  })
+  const byEffort: Record<Effort, number> = { easy: 0, medium: 0, hard: 0 }
+  for (const { mainTask } of chosen) byEffort[mainTask.effort] += 1
+  return { chosen, byEffort, skipped }
+}
+
+const EFFORT_WORDS: Record<Effort, [string, string]> = {
+  hard: ['difícil', 'difíceis'],
+  medium: ['média', 'médias'],
+  easy: ['fácil', 'fáceis'],
+}
+
+/** "2 difíceis, 1 média e 1 fácil" (hardest first; efforts with 0 are left out). */
+export function effortSentence(byEffort: Record<Effort, number>): string {
+  const parts = (['hard', 'medium', 'easy'] as const)
+    .filter((effort) => byEffort[effort] > 0)
+    .map((effort) => `${byEffort[effort]} ${EFFORT_WORDS[effort][byEffort[effort] === 1 ? 0 : 1]}`)
+  if (parts.length <= 1) return parts.join('')
+  return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`
+}

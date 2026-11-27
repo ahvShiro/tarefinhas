@@ -3,7 +3,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from '@/controllers/AuthProvider'
 import { RequireAuth } from '@/components/RequireAuth'
 import { usePreviewBubbleTheme } from '@/controllers/bubbleThemePreview'
+import { PhotosProvider } from '@/controllers/PhotosProvider'
 import { TasksProvider } from '@/controllers/TasksProvider'
+import { GalleryView } from '@/views/GalleryView'
 import { HomeView } from '@/views/HomeView'
 import { OverviewView } from '@/views/OverviewView'
 import { PickView } from '@/views/PickView'
@@ -32,7 +34,9 @@ export default function App() {
             element={
               <RequireAuth>
                 <TasksProvider>
-                  <OverviewView />
+                  <PhotosProvider>
+                    <OverviewView />
+                  </PhotosProvider>
                 </TasksProvider>
               </RequireAuth>
             }
@@ -42,7 +46,21 @@ export default function App() {
             element={
               <RequireAuth>
                 <TasksProvider>
-                  <PickView />
+                  <PhotosProvider>
+                    <PickView />
+                  </PhotosProvider>
+                </TasksProvider>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path={ROUTES.gallery}
+            element={
+              <RequireAuth>
+                <TasksProvider>
+                  <PhotosProvider>
+                    <GalleryView />
+                  </PhotosProvider>
                 </TasksProvider>
               </RequireAuth>
             }

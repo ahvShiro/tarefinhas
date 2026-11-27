@@ -1,5 +1,5 @@
 import type { MainTask } from '../mainTask'
-import type { CleanMainTaskInput } from '../mainTaskInput'
+import type { CleanMainTaskEdit, CleanMainTaskInput } from '../mainTaskInput'
 import type { MiniTask } from '../miniTask'
 
 export interface TaskSnapshot {
@@ -25,4 +25,16 @@ export interface TaskRepository {
   updateMiniTask(miniTask: MiniTask): Promise<MiniTask>
   /** Deleting the last step of a MainTask deletes the MainTask too. */
   deleteMiniTask(miniTaskId: string): Promise<void>
+  /**
+   * Saves the edited MainTask fields and step texts. Throws `EditNotSupportedError` while the backend has no route
+   * for it (then the screen keeps the change only until reload).
+   */
+  editMainTask(mainTaskId: string, edit: CleanMainTaskEdit): Promise<void>
+}
+
+/** The backend cannot save this yet. The screen applies the change locally and says it is not saved. */
+export class EditNotSupportedError extends Error {
+  constructor() {
+    super('O servidor ainda não salva edições.')
+  }
 }

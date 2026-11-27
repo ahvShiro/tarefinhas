@@ -1,6 +1,14 @@
 import { useContext } from 'react'
 import { DropdownMenu } from 'radix-ui'
-import { CalendarCheckIcon, CopyIcon, EllipsisIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import {
+  BookmarkPlusIcon,
+  CalendarCheckIcon,
+  CopyIcon,
+  EllipsisIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from 'lucide-react'
 import { MainTaskMenuContext } from '@/controllers/mainTaskMenuContext'
 import { cn } from '@/lib/utils'
 
@@ -10,7 +18,7 @@ const ITEM_CLASS =
 const CONTENT_CLASS =
   'z-50 min-w-52 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10'
 
-/** The "⋯" button of a MainTask card in the task bank: new step, duplicate, send to today and delete. */
+/** The "⋯" button of a MainTask card in the task bank: edit, new step, duplicate, save as template, send to today and delete. */
 export function MainTaskMenu({
   mainTaskId,
   mainTaskName,
@@ -37,6 +45,10 @@ export function MainTaskMenu({
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={CONTENT_CLASS} align="end" sideOffset={4}>
+          <DropdownMenu.Item className={ITEM_CLASS} onSelect={() => actions.onEdit(mainTaskId)}>
+            <PencilIcon />
+            Editar tarefa
+          </DropdownMenu.Item>
           <DropdownMenu.Item className={ITEM_CLASS} onSelect={() => actions.onAddStep(mainTaskId)}>
             <PlusIcon />
             Novo passo
@@ -44,6 +56,10 @@ export function MainTaskMenu({
           <DropdownMenu.Item className={ITEM_CLASS} onSelect={() => actions.onDuplicate(mainTaskId)}>
             <CopyIcon />
             Duplicar tarefa
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={ITEM_CLASS} onSelect={() => actions.onSaveTemplate(mainTaskId)}>
+            <BookmarkPlusIcon />
+            Salvar como modelo
           </DropdownMenu.Item>
           <DropdownMenu.Item
             className={ITEM_CLASS}

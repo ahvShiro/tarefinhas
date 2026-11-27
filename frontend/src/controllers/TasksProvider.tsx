@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { MainTask } from '@/models/mainTask'
 import {
   duplicateMainTaskInput,
+  validateMainTaskEdit,
   validateMainTaskInput,
+  type MainTaskEditInput,
   type MainTaskInput,
   type MainTaskInputErrors,
 } from '@/models/mainTaskInput'
@@ -18,7 +20,13 @@ import {
 import { moveToToday, splitOverdue, todayKey } from '@/models/overdue'
 import { ApiError, FORM_ERROR_KEY } from '@/models/repositories/apiClient'
 import { createApiTaskRepository } from '@/models/repositories/tasksApi'
-import { TasksContext, type CreateMainTaskResult, type TasksContextValue } from './tasksContext'
+import { EditNotSupportedError } from '@/models/repositories/types'
+import {
+  TasksContext,
+  type CreateMainTaskResult,
+  type EditMainTaskResult,
+  type TasksContextValue,
+} from './tasksContext'
 
 const GENERIC_ERROR = 'Não foi possível salvar. Tente de novo.'
 
@@ -146,6 +154,46 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     [miniTasks],
   )
 
+  const editMainTask = useCallback(
+    async (mainTaskId: string, input: MainTaskEditInput): Promise<EditMainTaskResult> => {
+      const validation = validateMainTaskEdit(input)
+      if (!validation.ok) return validation
+      const { cleaned } = validation
+      let savedOnServer = true
+      try {
+        await repository.editMainTask(mainTaskId, cleaned)
+      } catch (error) {
+        // Until the backend has the route, the change shows now and goes away on reload.
+        if (!(error instanceof EditNotSupportedError)) {
+          return { ok: false, errors: { name: error instanceof Error ? error.message : 'Não foi possível salvar.' } }
+        }
+        savedOnServer = false
+      }
+      const texts = new Map(cleaned.steps.map((step) => [step.id, step.text]))
+      setMainTasks((list) =>
+        list.map((mainTask) =>
+          mainTask.id === mainTaskId
+            ? {
+                ...mainTask,
+                name: cleaned.name,
+                description: cleaned.description,
+                deadlineDays: cleaned.deadlineDays,
+                effort: cleaned.effort,
+              }
+            : mainTask,
+        ),
+      )
+      setMiniTasks((list) =>
+        list.map((miniTask) => {
+          const text = texts.get(miniTask.id)
+          return text === undefined ? miniTask : { ...miniTask, text }
+        }),
+      )
+      return { ok: true, savedOnServer }
+    },
+    [],
+  )
+
   const duplicateMainTask = useCallback(
     async (mainTaskId: string) => {
       const source = mainTasksById.get(mainTaskId)
@@ -234,6 +282,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       copyMiniTask,
       addStep,
       deleteMiniTask,
+      editMainTask,
       duplicateMainTask,
       deleteMainTask,
       sendMainTaskToToday,
@@ -256,6 +305,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       copyMiniTask,
       addStep,
       deleteMiniTask,
+      editMainTask,
       duplicateMainTask,
       deleteMainTask,
       sendMainTaskToToday,

@@ -4,3 +4,5 @@ dev-dist/
 .DS_Store
 *.log
 .env
+# Photos of done steps, saved by the dev server (dev-server/taskPhotos.ts)
+local-photos/

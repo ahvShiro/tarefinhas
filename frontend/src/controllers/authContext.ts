@@ -1,14 +1,20 @@
 import { createContext } from 'react'
-import type { SignInErrors, SignInInput, SignUpErrors, SignUpInput } from '@/models/auth'
+import type { PasswordChangeErrors, PasswordChangeInput, SignInErrors, SignInInput, SignUpErrors, SignUpInput } from '@/models/auth'
 import type { Profile } from '@/models/profile'
 
 export type SignInResult = { ok: true } | { ok: false; errors: SignInErrors }
 export type SignUpResult = { ok: true } | { ok: false; errors: SignUpErrors }
 export type UpdateNameResult = { ok: true } | { ok: false; message: string }
+export type PasswordChangeResult =
+  | { ok: true }
+  | { ok: false; errors: PasswordChangeErrors; message?: string }
+export type DeleteAccountResult = { ok: true } | { ok: false; message: string }
 
 export interface AuthContextValue {
   /** Who is in the app. Null before sign-in and after sign-out. */
   profile: Profile | null
+  /** Id of the account that is in (from the API), or null. Keys what the browser keeps per account. */
+  accountId: string | null
   /** True while the app checks, at the start, whether the saved token still works. Do not decide on `profile` yet. */
   restoring: boolean
   /** True after the person chose to sign out, until the next sign-in. Then no screen is remembered to open next. */
@@ -23,6 +29,10 @@ export interface AuthContextValue {
   setProfilePhoto(photo: string | undefined): boolean
   /** Changes the name with the API (`PUT /users/me`). */
   updateName(name: string): Promise<UpdateNameResult>
+  /** Changes the password with the API. Not available until the backend has the route. */
+  changePassword(input: PasswordChangeInput): Promise<PasswordChangeResult>
+  /** Deletes the account with the API and signs out. Not available until the backend has the route. */
+  deleteAccount(): Promise<DeleteAccountResult>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

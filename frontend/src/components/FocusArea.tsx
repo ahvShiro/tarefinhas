@@ -1,16 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDownIcon, ChevronUpIcon, Maximize2Icon, Minimize2Icon } from 'lucide-react'
 import { addDays, format, startOfToday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DEFAULT_FOCUS_DAYS, MAX_FOCUS_DAYS, MIN_FOCUS_DAYS, parseFocusDays } from '@/models/focus'
-import type { MainTask } from '@/models/mainTask'
+import {
+  DEFAULT_FOCUS_DAYS,
+  MAX_FOCUS_DAYS,
+  MIN_FOCUS_DAYS,
+  deadlineHintOf,
+  nowLinePosition,
+  parseFocusDays,
+} from '@/models/focus'
+import { getDeadline, type MainTask } from '@/models/mainTask'
 import { hourSlotOf, type MiniTask } from '@/models/miniTask'
 import { dayDropId, slotDropId } from '@/views/dropTargets'
 import { DraggableMiniTask } from './DraggableMiniTask'
+import { cn } from '@/lib/utils'
 import { FocusSlot } from './FocusSlot'
 
-const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
+// The day starts at 06:00. 00:00 to 05:00 ("Madrugada") fold into one row that opens on a click.
+const DAY_START_HOUR = 6
+const EARLY_HOURS = Array.from({ length: DAY_START_HOUR }, (_, hour) => hour)
+const DAY_HOURS = Array.from({ length: 24 - DAY_START_HOUR }, (_, index) => DAY_START_HOUR + index)
 const FIRST_VISIBLE_HOUR = 8
 
 interface FocusAreaProps {
@@ -22,6 +35,21 @@ interface FocusAreaProps {
   initialDayCount?: number
   /** Called when the person sets a new number of days in the field. */
   onDayCountChange?: (dayCount: number) => void
+  /** How many photos a step has (the photo mark on the card). */
+  photoCountOf?: (miniTaskId: string) => number
+  /** True while "Em foco" fills the screen (the task bank is hidden). */
+  expanded?: boolean
+  onToggleExpanded?: () => void
+}
+
+/** The current time, again every 30 seconds, for the "now" line and the deadline warnings. */
+function useNow(): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return now
 }
 
 function hourLabel(hour: number): string {
@@ -35,7 +63,18 @@ export function FocusArea({
   onToggleDone,
   initialDayCount = DEFAULT_FOCUS_DAYS,
   onDayCountChange,
+  photoCountOf,
+  expanded = false,
+  onToggleExpanded,
 }: FocusAreaProps) {
+  const now = useNow()
+  const todayKey = format(now, 'yyyy-MM-dd')
+  const nowLine = nowLinePosition(now)
+  // Opens by itself when the panel is opened during the early hours, so the "now" line shows.
+  const [earlyOpen, setEarlyOpen] = useState(() => new Date().getHours() < DAY_START_HOUR)
+  // The panel opens on the morning, or on the hour before now when the day is past it (in the early hours, on now).
+  const scrollHour =
+    nowLine.hour < DAY_START_HOUR ? Math.max(0, nowLine.hour - 1) : Math.max(FIRST_VISIBLE_HOUR, nowLine.hour - 1)
   const scrollRef = useRef<HTMLDivElement>(null)
   const hourRowRef = useRef<HTMLDivElement>(null)
   const [dayCount, setDayCount] = useState(initialDayCount)
@@ -48,7 +87,9 @@ export function FocusArea({
       const date = addDays(today, offset)
       return { key: format(date, 'yyyy-MM-dd'), label: format(date, 'EEE dd/MM', { locale: ptBR }) }
     })
-  }, [dayCount])
+    // todayKey moves the days on at midnight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayCount, todayKey])
 
   // Key: `${date}` for slots without time, `${date} ${HH:00}` for hour slots (an exact time sits in its hour).
   const bySlot = useMemo(() => {
@@ -74,6 +115,10 @@ export function FocusArea({
     }
   }, [])
 
+  /** Steps planned for 00:00 to 05:00 of a day, shown on the folded row. */
+  const earlyCount = (dayKey: string) =>
+    EARLY_HOURS.reduce((total, hour) => total + (bySlot.get(`${dayKey} ${hourLabel(hour)}`)?.length ?? 0), 0)
+
   const renderMiniTasks = (key: string) =>
     (bySlot.get(key) ?? []).map((miniTask) => {
       const mainTask = getMainTask(miniTask.mainTaskId)
@@ -85,6 +130,8 @@ export function FocusArea({
           color={mainTask.color}
           onOpen={onOpen}
           onToggleDone={onToggleDone}
+          deadline={deadlineHintOf(getDeadline(mainTask), now)}
+          photoCount={photoCountOf?.(miniTask.id)}
           compact
         />
       )
@@ -92,9 +139,10 @@ export function FocusArea({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-      <header className="flex items-center justify-between gap-3 border-b px-4 py-2">
-        <h2 className="font-heading font-medium">Em foco</h2>
-        <div className="flex items-center gap-2">
+      <header className="border-b px-4 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-heading font-medium">Em foco</h2>
+          <div className="flex items-center gap-2">
           <Label htmlFor="focus-days" className="text-xs font-normal text-muted-foreground">
             Dias
           </Label>
@@ -117,6 +165,19 @@ export function FocusArea({
             onBlur={() => setDayCountDraft(String(dayCount))}
             className="h-7 w-14 px-2 text-sm"
           />
+            {onToggleExpanded && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onToggleExpanded}
+                aria-pressed={expanded}
+                aria-label={expanded ? 'Voltar ao tamanho normal' : 'Encher a tela com o Em foco'}
+                title={expanded ? 'Voltar ao tamanho normal' : 'Encher a tela'}
+              >
+                {expanded ? <Minimize2Icon /> : <Maximize2Icon />}
+              </Button>
+            )}
+          </div>
         </div>
       </header>
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto">
@@ -148,11 +209,46 @@ export function FocusArea({
             </FocusSlot>
           ))}
 
-          {HOURS.map((hour) => (
+          <div className="sticky left-0 z-10 border-b bg-card">
+            <button
+              type="button"
+              onClick={() => setEarlyOpen((open) => !open)}
+              aria-expanded={earlyOpen}
+              className="flex w-full items-center gap-0.5 px-1 py-1 text-left text-[10px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3"
+              title={earlyOpen ? 'Recolher 00:00 a 05:00' : 'Mostrar 00:00 a 05:00'}
+            >
+              Madrugada
+              {earlyOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+            </button>
+          </div>
+          {days.map((day) => {
+            const count = earlyCount(day.key)
+            return (
+              <button
+                key={day.key}
+                type="button"
+                onClick={() => setEarlyOpen((open) => !open)}
+                aria-label={`${day.label}, madrugada: ${count === 1 ? '1 passo' : `${count} passos`}. ${earlyOpen ? 'Recolher' : 'Mostrar'}`}
+                className="border-b border-l bg-muted/40 px-2 py-1 text-left text-[10px] text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              >
+                {count > 0 && (
+                  <span className="rounded-full bg-foreground/10 px-1.5 py-px font-semibold text-foreground">
+                    {count === 1 ? '1 passo' : `${count} passos`}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+
+          {(earlyOpen ? [...EARLY_HOURS, ...DAY_HOURS] : DAY_HOURS).map((hour) => (
             <div key={hour} className="contents">
               <div
-                ref={hour === FIRST_VISIBLE_HOUR ? hourRowRef : undefined}
-                className="sticky left-0 z-10 border-b bg-card px-1 py-1 text-[10px] text-muted-foreground"
+                ref={hour === scrollHour ? hourRowRef : undefined}
+                className={cn(
+                  'sticky left-0 z-10 border-b bg-card px-1 py-1 text-[10px] text-muted-foreground',
+                  hour < DAY_START_HOUR && 'bg-muted/60',
+                  hour === nowLine.hour && 'font-semibold text-red-600',
+                )}
               >
                 {hourLabel(hour)}
               </div>
@@ -161,7 +257,8 @@ export function FocusArea({
                   key={day.key}
                   dropId={slotDropId(day.key, hour)}
                   label={`${day.label}, ${hourLabel(hour)}`}
-                  className="border-l"
+                  className={cn('border-l', hour < DAY_START_HOUR && 'bg-muted/30')}
+                  nowFraction={day.key === todayKey && hour === nowLine.hour ? nowLine.fraction : undefined}
                 >
                   {renderMiniTasks(`${day.key} ${hourLabel(hour)}`)}
                 </FocusSlot>

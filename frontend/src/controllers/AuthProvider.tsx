@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  validatePasswordChange,
   validateSignIn,
   validateSignUp,
+  type PasswordChangeInput,
   type SignInErrors,
   type SignInInput,
   type SignUpErrors,
@@ -9,6 +11,8 @@ import {
 } from '@/models/auth'
 import { ApiError, FORM_ERROR_KEY, setUnauthorizedHandler } from '@/models/repositories/apiClient'
 import {
+  changePasswordRequest,
+  deleteAccountRequest,
   fetchCurrentUser,
   signInRequest,
   signOutRequest,
@@ -20,6 +24,8 @@ import { clearLegacyStorage, loadPhoto, savePhoto } from '@/models/repositories/
 import {
   AuthContext,
   type AuthContextValue,
+  type DeleteAccountResult,
+  type PasswordChangeResult,
   type SignInResult,
   type SignUpResult,
   type UpdateNameResult,
@@ -132,9 +138,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const changePassword = useCallback(async (input: PasswordChangeInput): Promise<PasswordChangeResult> => {
+    const validation = validatePasswordChange(input)
+    if (!validation.ok) return validation
+    try {
+      await changePasswordRequest()
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, errors: {}, message: error instanceof Error ? error.message : GENERIC_ERROR }
+    }
+  }, [])
+
+  const deleteAccount = useCallback(async (): Promise<DeleteAccountResult> => {
+    try {
+      await deleteAccountRequest()
+      setUser(null)
+      setJustSignedOut(true)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : GENERIC_ERROR }
+    }
+  }, [])
+
   const value = useMemo<AuthContextValue>(
-    () => ({ profile, restoring, justSignedOut, signIn, signUp, signOut, setProfilePhoto, updateName }),
-    [profile, restoring, justSignedOut, signIn, signUp, signOut, setProfilePhoto, updateName],
+    () => ({
+      profile,
+      accountId: userId ?? null,
+      restoring,
+      justSignedOut,
+      signIn,
+      signUp,
+      signOut,
+      setProfilePhoto,
+      updateName,
+      changePassword,
+      deleteAccount,
+    }),
+    [
+      profile,
+      userId,
+      restoring,
+      justSignedOut,
+      signIn,
+      signUp,
+      signOut,
+      setProfilePhoto,
+      updateName,
+      changePassword,
+      deleteAccount,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

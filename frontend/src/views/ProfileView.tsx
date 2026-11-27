@@ -2,6 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AppBrand } from '@/components/AppBrand'
 import { PhotoError, photoFromFile } from '@/components/profilePhoto'
+import { DeleteAccountSection, PasswordForm } from '@/components/AccountSettings'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,6 +53,9 @@ export function ProfileView() {
           <Link to={ROUTES.pick} className={buttonVariants({ variant: 'outline' })}>
             Escolher tarefas do dia
           </Link>
+          <Link to={ROUTES.gallery} className={buttonVariants({ variant: 'outline' })}>
+            Galeria
+          </Link>
         </div>
       </header>
 
@@ -101,6 +105,8 @@ export function ProfileView() {
         </div>
 
         <NameForm />
+        <PasswordForm />
+        <DeleteAccountSection />
 
         <Button variant="outline" onClick={() => void handleSignOut()}>
           Sair

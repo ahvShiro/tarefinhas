@@ -32,3 +32,20 @@ export function fetchCurrentUser(): Promise<ApiUser> {
 export function updateCurrentUser(name: string): Promise<ApiUser> {
   return request<ApiUser>('/users/me', { method: 'PUT', body: { name } })
 }
+
+/** The backend cannot do this yet (no route). The screen says so instead of pretending. */
+export class AccountActionNotSupportedError extends Error {
+  constructor() {
+    super('Ainda não disponível: o servidor não tem essa função.')
+  }
+}
+
+// No route yet. When the backend adds them (for example PUT /users/me/password with the current and the new
+// password, and DELETE /users/me), call them here; the screens stay the same.
+export async function changePasswordRequest(): Promise<void> {
+  throw new AccountActionNotSupportedError()
+}
+
+export async function deleteAccountRequest(): Promise<void> {
+  throw new AccountActionNotSupportedError()
+}

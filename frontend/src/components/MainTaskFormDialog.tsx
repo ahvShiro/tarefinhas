@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { BookmarkPlusIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { CreateMainTaskResult } from '@/controllers/tasksContext'
+import { useTaskTemplates } from '@/controllers/useTaskTemplates'
 import {
   DEFAULT_EFFORT,
   EFFORT_LABELS,
@@ -22,15 +23,10 @@ import {
   type Effort,
 } from '@/models/mainTask'
 import type { MainTaskInput, MainTaskInputErrors } from '@/models/mainTaskInput'
-
-interface StepField {
-  id: string
-  text: string
-}
-
-function newStep(): StepField {
-  return { id: crypto.randomUUID(), text: '' }
-}
+import { templateFrom, type TaskTemplate } from '@/models/taskTemplate'
+import { StepListEditor } from './StepListEditor'
+import { newStep, type StepField } from './stepFields'
+import { TemplatePicker } from './TemplatePicker'
 
 interface MainTaskFormDialogProps {
   open: boolean
@@ -55,6 +51,9 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
   const [effort, setEffort] = useState<Effort>(DEFAULT_EFFORT)
   const [errors, setErrors] = useState<MainTaskInputErrors>({})
   const [submitting, setSubmitting] = useState(false)
+  const { templates, save: saveTemplate, remove: removeTemplate } = useTaskTemplates()
+  // Answer to "Salvar como modelo", shown for a moment under the buttons.
+  const [templateNote, setTemplateNote] = useState<{ text: string; error: boolean } | null>(null)
 
   function reset() {
     setName('')
@@ -63,14 +62,35 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
     setDeadlineDays('')
     setEffort(DEFAULT_EFFORT)
     setErrors({})
+    setTemplateNote(null)
   }
 
-  function updateStep(id: string, text: string) {
-    setSteps((current) => current.map((step) => (step.id === id ? { ...step, text } : step)))
+  function applyTemplate(template: TaskTemplate) {
+    setName(template.name)
+    setDescription(template.description)
+    setSteps(template.steps.map((text) => newStep(text)))
+    setDeadlineDays(template.deadlineDays === undefined ? '' : String(template.deadlineDays))
+    setEffort(template.effort)
+    setErrors({})
+    setTemplateNote(null)
   }
 
-  function removeStep(id: string) {
-    setSteps((current) => (current.length > 1 ? current.filter((step) => step.id !== id) : [newStep()]))
+  function saveAsTemplate() {
+    const template = templateFrom(
+      { name, description, steps: steps.map((step) => step.text), effort, deadlineDays },
+      crypto.randomUUID(),
+      new Date().toISOString(),
+    )
+    if (!template) {
+      setTemplateNote({ text: 'Para salvar um modelo, escreva o nome e pelo menos 1 passo.', error: true })
+      return
+    }
+    const stored = saveTemplate(template)
+    setTemplateNote(
+      stored
+        ? { text: `Modelo “${template.name}” salvo neste navegador.`, error: false }
+        : { text: 'O navegador não deixou guardar o modelo (espaço cheio ou bloqueado).', error: true },
+    )
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -91,11 +111,15 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nova tarefa</DialogTitle>
           <DialogDescription>Cada passo vira uma miniTask no banco de tarefas.</DialogDescription>
         </DialogHeader>
+
+        <div className="-mt-1">
+          <TemplatePicker templates={templates} onUse={applyTemplate} onRemove={removeTemplate} />
+        </div>
 
         <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
@@ -124,36 +148,7 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
 
           <fieldset className="flex flex-col gap-1.5" aria-describedby="main-task-steps-error">
             <legend className="mb-1.5 text-sm font-medium">Passos</legend>
-            {steps.map((step, index) => (
-              <div key={step.id} className="flex items-center gap-2">
-                <span className="w-5 text-right text-xs text-muted-foreground">{index + 1}.</span>
-                <Input
-                  value={step.text}
-                  onChange={(event) => updateStep(step.id, event.target.value)}
-                  aria-label={`Passo ${index + 1}`}
-                  aria-invalid={Boolean(errors.steps)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => removeStep(step.id)}
-                  aria-label={`Remover passo ${index + 1}`}
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              onClick={() => setSteps((current) => [...current, newStep()])}
-            >
-              <PlusIcon />
-              Adicionar passo
-            </Button>
+            <StepListEditor steps={steps} onChange={setSteps} invalid={Boolean(errors.steps)} />
             <FieldError id="main-task-steps-error" message={errors.steps} />
           </fieldset>
 
@@ -194,11 +189,20 @@ export function MainTaskFormDialog({ open, onOpenChange, onSubmit }: MainTaskFor
             <FieldError id="main-task-deadline-error" message={errors.deadlineDays} />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="items-center sm:justify-between">
+            <Button type="button" variant="outline" onClick={saveAsTemplate}>
+              <BookmarkPlusIcon />
+              Salvar como modelo
+            </Button>
             <Button type="submit" disabled={submitting}>
               Salvar
             </Button>
           </DialogFooter>
+          {templateNote && (
+            <p role="status" className={templateNote.error ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+              {templateNote.text}
+            </p>
+          )}
         </form>
       </DialogContent>
     </Dialog>

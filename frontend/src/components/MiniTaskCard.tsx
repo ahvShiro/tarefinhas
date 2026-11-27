@@ -1,6 +1,8 @@
 import type { MouseEvent, PointerEvent } from 'react'
+import { AlarmClockIcon, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
+import type { DeadlineHint } from '@/models/focus'
 import { hasExactMinutes, type MiniTask } from '@/models/miniTask'
 
 interface MiniTaskCardProps {
@@ -9,13 +11,26 @@ interface MiniTaskCardProps {
   onToggleDone?: () => void
   compact?: boolean
   className?: string
+  /** Close or past deadline of the MainTask. Shown only while the step is not done. */
+  deadline?: DeadlineHint | null
+  /** How many photos prove the step. Shown when more than 0. */
+  photoCount?: number
 }
 
 function stop(event: MouseEvent | PointerEvent) {
   event.stopPropagation()
 }
 
-export function MiniTaskCard({ miniTask, color, onToggleDone, compact, className }: MiniTaskCardProps) {
+export function MiniTaskCard({
+  miniTask,
+  color,
+  onToggleDone,
+  compact,
+  className,
+  deadline,
+  photoCount = 0,
+}: MiniTaskCardProps) {
+  const showDeadline = deadline && !miniTask.done
   return (
     <div
       className={cn(
@@ -38,6 +53,31 @@ export function MiniTaskCard({ miniTask, color, onToggleDone, compact, className
           <span className="mr-1.5 font-semibold tabular-nums">{miniTask.scheduledTime}</span>
         )}
         {miniTask.text}
+        {(showDeadline || photoCount > 0) && (
+          <span className="mt-0.5 flex flex-wrap items-center gap-1 [&_svg]:size-3">
+            {showDeadline && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] font-semibold',
+                  deadline.level === 'overdue' ? 'bg-destructive text-white' : 'bg-amber-200 text-amber-950',
+                )}
+              >
+                <AlarmClockIcon />
+                {deadline.label}
+              </span>
+            )}
+            {photoCount > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
+                title={photoCount === 1 ? '1 foto' : `${photoCount} fotos`}
+                aria-label={photoCount === 1 ? '1 foto' : `${photoCount} fotos`}
+              >
+                <ImageIcon />
+                {photoCount}
+              </span>
+            )}
+          </span>
+        )}
       </span>
     </div>
   )

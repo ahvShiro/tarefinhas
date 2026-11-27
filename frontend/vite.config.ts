@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { bubbleThemeAdmin } from './dev-server/bubbleThemeAdmin.ts'
+import { taskPhotos } from './dev-server/taskPhotos.ts'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,6 +12,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     bubbleThemeAdmin(),
+    taskPhotos(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],

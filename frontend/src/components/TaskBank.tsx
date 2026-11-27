@@ -1,7 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FileDownIcon, FocusIcon, MinusIcon, PlusIcon, SearchIcon } from 'lucide-react'
 import { useDndMonitor, useDraggable, useDroppable, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core'
 import {
   Handle,
+  Panel,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -12,7 +14,13 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { matchBank } from '@/models/bankSearch'
+import { downloadBlob, textFile } from '@/lib/download'
+import { bankAsText, bankFileName } from '@/models/exportTasks'
 import { buildBankGraph, type BankGraphNode } from '@/models/bankGraph'
 import type { MainTask } from '@/models/mainTask'
 import { isInTaskBank, type MiniTask } from '@/models/miniTask'
@@ -26,6 +34,8 @@ type MiniTaskNodeData = {
   miniTask: MiniTask
   color: string
   ghost: boolean
+  /** Faded because it does not match the search. */
+  dimmed: boolean
   onOpen: (miniTaskId: string) => void
   onToggleDone: (miniTaskId: string) => void
 }
@@ -37,6 +47,7 @@ type MainTaskNodeData = {
   color: string
   /** Some step of this MainTask is in the bank and not done. */
   hasStepsToSend: boolean
+  dimmed: boolean
 }
 
 type MainTaskNode = Node<MainTaskNodeData, 'mainTask'>
@@ -60,7 +71,7 @@ function MiniTaskNodeView({ data }: NodeProps<MiniTaskNode>) {
       <Handle type="target" position={Position.Left} isConnectable={false} style={centerHandle} />
       {/* React Flow turns off pointer events on nodes that are not draggable or selectable: turn them back on,
           so dnd-kit gets the drag and the card gets clicks. */}
-      <div className="pointer-events-auto">
+      <div className={cn('pointer-events-auto transition-opacity duration-200', data.dimmed && 'opacity-20')}>
         <DraggableMiniTask
           miniTask={data.miniTask}
           color={data.color}
@@ -86,7 +97,10 @@ function MainTaskNodeView({ id, data }: NodeProps<MainTaskNode>) {
         {...attributes}
         {...listeners}
         aria-label={`Tarefa: ${data.mainTask.name}`}
-        className="nodrag nopan pointer-events-auto relative w-60 cursor-grab touch-none rounded-xl border-2 px-10 py-3 text-center font-heading text-base font-semibold break-words shadow-md outline-none"
+        className={cn(
+          'nodrag nopan pointer-events-auto relative w-60 cursor-grab touch-none rounded-xl border-2 px-10 py-3 text-center font-heading text-base font-semibold break-words shadow-md outline-none transition-opacity duration-200',
+          data.dimmed && 'opacity-20',
+        )}
         style={{ borderColor: data.color, backgroundColor: `color-mix(in srgb, ${data.color} 30%, var(--card))` }}
       >
         {data.mainTask.name}
@@ -114,14 +128,21 @@ interface TaskBankProps {
   onToggleDone: (miniTaskId: string) => void
 }
 
+interface TaskBankGraphProps extends TaskBankProps {
+  /** Node ids that match the search; the others fade. Null: no search. */
+  highlight: Set<string> | null
+  /** Goes up each time the person presses Enter in the search: the camera frames the matches. */
+  fitRequest: number
+}
+
 /** The card held now, and whether the pointer is still over the bank. */
 interface Held {
   id: string
   overBank: boolean
 }
 
-function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankProps) {
-  const { fitView, screenToFlowPosition } = useReactFlow()
+function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone, highlight, fitRequest }: TaskBankGraphProps) {
+  const { fitView, screenToFlowPosition, zoomIn, zoomOut } = useReactFlow()
   const reducedMotion = usePrefersReducedMotion()
   const graph = useMemo(() => buildBankGraph(mainTasks, miniTasks), [mainTasks, miniTasks])
   const shape = useMemo(
@@ -214,6 +235,7 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
                 hasStepsToSend: miniTasks.some(
                   (miniTask) => miniTask.mainTaskId === node.mainTask.id && isInTaskBank(miniTask) && !miniTask.done,
                 ),
+                dimmed: highlight !== null && !highlight.has(node.id),
               },
             },
           ]
@@ -226,11 +248,18 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
             type: 'miniTask',
             position,
             measured: measured[node.id],
-            data: { miniTask: node.miniTask, color: node.color, ghost, onOpen, onToggleDone },
+            data: {
+              miniTask: node.miniTask,
+              color: node.color,
+              ghost,
+              dimmed: highlight !== null && !highlight.has(node.id),
+              onOpen,
+              onToggleDone,
+            },
           },
         ]
       }),
-    [graph, positions, held, measured, miniTasks, onOpen, onToggleDone],
+    [graph, positions, held, measured, miniTasks, highlight, onOpen, onToggleDone],
   )
 
   const edges = useMemo(
@@ -241,11 +270,23 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
           source: link.source,
           target: link.target,
           type: 'straight',
-          style: { stroke: link.color, strokeWidth: 2 },
+          style: {
+            stroke: link.color,
+            strokeWidth: 2,
+            opacity: highlight !== null && !(highlight.has(link.source) && highlight.has(link.target)) ? 0.15 : 1,
+          },
         }),
       ),
-    [graph],
+    [graph, highlight],
   )
+
+  // Enter in the search frames the matching cards.
+  useEffect(() => {
+    if (fitRequest === 0 || !highlight || highlight.size === 0) return
+    void fitView({ nodes: [...highlight].map((id) => ({ id })), padding: 0.3, maxZoom: 1.2, duration: 400 })
+    // Only when the person asks (Enter), not on every search change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitRequest])
 
   return (
     <ReactFlow
@@ -260,13 +301,45 @@ function TaskBankGraph({ mainTasks, miniTasks, onOpen, onToggleDone }: TaskBankP
       fitView
       fitViewOptions={FIT_OPTIONS}
       proOptions={{ hideAttribution: true }}
-    />
+    >
+      <Panel position="bottom-right" className="flex flex-col gap-1 rounded-lg border bg-card p-1 shadow-sm">
+        <Button variant="ghost" size="icon-sm" onClick={() => void zoomIn({ duration: 200 })} aria-label="Aproximar" title="Aproximar">
+          <PlusIcon />
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={() => void zoomOut({ duration: 200 })} aria-label="Afastar" title="Afastar">
+          <MinusIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void fitView({ ...FIT_OPTIONS, duration: 300 })}
+          aria-label="Centralizar: mostrar todas as tarefas"
+          title="Centralizar"
+        >
+          <FocusIcon />
+        </Button>
+      </Panel>
+    </ReactFlow>
   )
 }
 
 export function TaskBank(props: TaskBankProps) {
   const { setNodeRef, isOver } = useDroppable({ id: TASK_BANK_DROP_ID })
-  const isEmpty = !props.miniTasks.some(isInTaskBank)
+  const [query, setQuery] = useState('')
+  const [hideDone, setHideDone] = useState(false)
+  const [fitRequest, setFitRequest] = useState(0)
+
+  const miniTasks = useMemo(
+    () => (hideDone ? props.miniTasks.filter((miniTask) => !miniTask.done) : props.miniTasks),
+    [hideDone, props.miniTasks],
+  )
+  const highlight = useMemo(() => matchBank(query, props.mainTasks, miniTasks), [query, props.mainTasks, miniTasks])
+  const isEmpty = !miniTasks.some(isInTaskBank)
+  const nothingFound = highlight !== null && highlight.size === 0
+
+  function exportBank() {
+    downloadBlob(textFile(bankAsText(props.mainTasks, props.miniTasks)), bankFileName())
+  }
 
   return (
     <section
@@ -276,15 +349,48 @@ export function TaskBank(props: TaskBankProps) {
         isOver && 'ring-2 ring-primary',
       )}
     >
-      <h2 className="border-b px-4 py-2 font-heading font-medium">Banco de tarefas</h2>
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2">
+        <h2 className="font-heading font-medium">Banco de tarefas</h2>
+        <label className="relative min-w-40 flex-1 sm:max-w-64">
+          <span className="sr-only">Buscar no banco</span>
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') setFitRequest((count) => count + 1)
+            }}
+            placeholder="Buscar passo ou tarefa"
+            title="Enter leva a câmera até o que foi achado"
+            className="h-8 pl-8"
+          />
+        </label>
+        {nothingFound && <span className="text-xs text-muted-foreground">Nada encontrado.</span>}
+        <div className="ml-auto flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox checked={hideDone} onCheckedChange={(checked) => setHideDone(checked === true)} />
+            Esconder feitos
+          </label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportBank}
+            title="Baixa as tarefas do banco num arquivo de texto (.txt)"
+          >
+            <FileDownIcon />
+            Exportar
+          </Button>
+        </div>
+      </header>
       {/* Fixed dot background: panning moves the cards, not the dots. React Flow's own Background follows the viewport. */}
       <div className="relative min-h-0 flex-1 bg-[radial-gradient(circle,#91919a_1px,transparent_1px)] bg-size-[20px_20px]">
         <ReactFlowProvider>
-          <TaskBankGraph {...props} />
+          <TaskBankGraph {...props} miniTasks={miniTasks} highlight={highlight} fitRequest={fitRequest} />
         </ReactFlowProvider>
         {isEmpty && (
           <p className="pointer-events-none absolute inset-0 grid place-content-center text-sm text-muted-foreground">
-            Nenhuma tarefa no banco.
+            {hideDone && props.miniTasks.some(isInTaskBank) ? 'Só há passos feitos no banco.' : 'Nenhuma tarefa no banco.'}
           </p>
         )}
       </div>

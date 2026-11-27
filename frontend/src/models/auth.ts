@@ -59,10 +59,9 @@ export function validateSignUp(input: SignUpInput): SignUpValidation {
   if (emailMessage) errors.email = emailMessage
   if (input.password === '') {
     errors.password = 'Informe uma senha.'
-  } else if (input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `Use uma senha com pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`
-  } else if (!STRONG_PASSWORD_PATTERN.test(input.password)) {
-    errors.password = 'Use pelo menos 1 letra maiúscula, 1 minúscula, 1 número e 1 caractere especial.'
+  } else {
+    const strength = newPasswordError(input.password)
+    if (strength) errors.password = strength
   }
   if (input.passwordConfirmation === '') {
     errors.passwordConfirmation = 'Digite a senha de novo para confirmar.'
@@ -72,4 +71,41 @@ export function validateSignUp(input: SignUpInput): SignUpValidation {
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }
   return { ok: true, cleaned: { name, email, password: input.password, passwordConfirmation: input.passwordConfirmation } }
+}
+
+/** Why a new password is too weak, or undefined when it is good (the sign-up rules). */
+function newPasswordError(password: string): string | undefined {
+  if (password.length < MIN_PASSWORD_LENGTH) return `Use uma senha com pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`
+  if (!STRONG_PASSWORD_PATTERN.test(password)) {
+    return 'Use pelo menos 1 letra maiúscula, 1 minúscula, 1 número e 1 caractere especial.'
+  }
+  return undefined
+}
+
+export interface PasswordChangeInput {
+  currentPassword: string
+  newPassword: string
+  newPasswordConfirmation: string
+}
+
+export type PasswordChangeErrors = Partial<Record<keyof PasswordChangeInput, string>>
+
+export function validatePasswordChange(
+  input: PasswordChangeInput,
+): { ok: true } | { ok: false; errors: PasswordChangeErrors } {
+  const errors: PasswordChangeErrors = {}
+  if (input.currentPassword === '') errors.currentPassword = 'Informe sua senha atual.'
+  if (input.newPassword === '') {
+    errors.newPassword = 'Informe a nova senha.'
+  } else {
+    const strength = newPasswordError(input.newPassword)
+    if (strength) errors.newPassword = strength
+    else if (input.newPassword === input.currentPassword) errors.newPassword = 'A nova senha precisa ser diferente da atual.'
+  }
+  if (input.newPasswordConfirmation === '') {
+    errors.newPasswordConfirmation = 'Digite a nova senha de novo para confirmar.'
+  } else if (input.newPasswordConfirmation !== input.newPassword) {
+    errors.newPasswordConfirmation = 'As senhas não são iguais. Digite a mesma senha nos 2 campos.'
+  }
+  return Object.keys(errors).length > 0 ? { ok: false, errors } : { ok: true }
 }
